@@ -2,6 +2,7 @@
 
 /* Define the data structures from winternl.h and ntdll.lib to make the code platform-independent */
 
+// See: https://learn.microsoft.com/en-us/windows/win32/api/lsalookup/ns-lsalookup-lsa_unicode_string
 typedef struct _LSA_UNICODE_STRING
 {
     USHORT Length;
@@ -9,6 +10,7 @@ typedef struct _LSA_UNICODE_STRING
     PWSTR Buffer;
 } LSA_UNICODE_STRING, *PLSA_UNICODE_STRING, UNICODE_STRING, *PUNICODE_STRING;
 
+// See: http://undocumented.ntinternals.net/index.html?page=UserMode%2FStructures%2FLDR_MODULE.html
 typedef struct _LDR_MODULE
 {
     LIST_ENTRY InLoadOrderModuleList;
@@ -26,6 +28,7 @@ typedef struct _LDR_MODULE
     ULONG TimeDateStamp;
 } LDR_MODULE, *PLDR_MODULE;
 
+// See: http://undocumented.ntinternals.net/index.html?page=UserMode%2FStructures%2FPEB_LDR_DATA.html
 typedef struct _PEB_LDR_DATA
 {
     ULONG Length;
@@ -36,12 +39,14 @@ typedef struct _PEB_LDR_DATA
     LIST_ENTRY InInitializationOrderModuleList;
 } PEB_LDR_DATA, *PPEB_LDR_DATA;
 
+// See: https://www.geoffchappell.com/studies/windows/km/ntoskrnl/inc/api/pebteb/curdir.htm
 typedef struct _CURDIR
 {
     UNICODE_STRING DosPath;
     PVOID Handle;
 } CURDIR, *PCURDIR;
 
+// See: https://learn.microsoft.com/en-us/windows/win32/api/ntdef/ns-ntdef-string
 typedef struct _STRING
 {
     USHORT Length;
@@ -49,6 +54,7 @@ typedef struct _STRING
     PCHAR Buffer;
 } ANSI_STRING, *PANSI_STRING;
 
+// See: http://undocumented.ntinternals.net/index.html?page=UserMode%2FStructures%2FRTL_DRIVE_LETTER_CURDIR.html
 typedef struct _RTL_DRIVE_LETTER_CURDIR
 {
     WORD Flags;
@@ -57,6 +63,7 @@ typedef struct _RTL_DRIVE_LETTER_CURDIR
     ANSI_STRING DosPath;
 } RTL_DRIVE_LETTER_CURDIR, *PRTL_DRIVE_LETTER_CURDIR;
 
+// See: http://undocumented.ntinternals.net/index.html?page=UserMode%2FStructures%2FRTL_USER_PROCESS_PARAMETERS.html
 typedef struct _RTL_USER_PROCESS_PARAMETERS
 {
     ULONG MaximumLength;
@@ -90,6 +97,7 @@ typedef struct _RTL_USER_PROCESS_PARAMETERS
     ULONG EnvironmentSize;
 } RTL_USER_PROCESS_PARAMETERS, *PRTL_USER_PROCESS_PARAMETERS;
 
+// See: http://undocumented.ntinternals.net/index.html?page=UserMode%2FUndocumented%20Functions%2FNT%20Objects%2FProcess%2FPEB.html
 typedef struct _PEB
 {
     BOOLEAN InheritedAddressSpace;
@@ -147,6 +155,11 @@ typedef struct _PEB
     BYTE TlsExpansionBitmapBits[0x80];
     ULONG SessionId;
 } PEB, *PPEB;
+
+/* Low-level, function pointer types for required functions */
+typedef HMODULE(WINAPI *LOADLIBRARYA)(LPCSTR);
+typedef FARPROC(WINAPI *GETPROCADDRESS)(HMODULE, LPCSTR);
+typedef LPVOID(WINAPI *VIRTUALALLOC)(LPVOID, SIZE_T, DWORD, DWORD);
 
 /* End data structures */
 
@@ -215,14 +228,14 @@ inline BOOL string_compare_a(LPCSTR str1, LPCSTR str2)
     independently of the host process.
     See:https://learn.microsoft.com/en-us/windows/win32/api/libloaderapi/nf-libloaderapi-getmodulehandlea
 */
-inline DWORD64 get_module_handle_a(char *lpModuleName)
+inline DWORD64 get_module_handle_a(char *lp_module_name)
 {
     // Get the pointer to the PEB
     // See: https://learn.microsoft.com/en-us/windows/win32/api/winternl/ns-winternl-peb
     PPEB peb = (PPEB)__readgsqword(0x60);
 
     PLDR_MODULE module = NULL;
-    CHAR wDllName[64] = {0};
+    CHAR dll_name[64] = {0};
     // Get the head of the doubly-linked list containing the loaded modules.
     PLIST_ENTRY head = &peb->LoaderData->InMemoryOrderModuleList;
     // Get the first module in the list.
@@ -237,10 +250,11 @@ inline DWORD64 get_module_handle_a(char *lpModuleName)
         module = (PLDR_MODULE)((PBYTE)next - 0x10);
         if (module->BaseDllName.Buffer != NULL)
         {
-            // Retrieve the name and convert to ASCII
-            zeroize((DWORD64)wDllName, sizeof(wDllName));
-            wchar_to_ascii(wDllName, module->BaseDllName.Buffer, 0x40);
-            if (string_compare_a(lpModuleName, wDllName))
+            // Compare the name with the required function
+            // Zeroize a memory space, convert the name to ascii and compare
+            zeroize((DWORD64)dll_name, sizeof(dll_name));
+            wchar_to_ascii(dll_name, module->BaseDllName.Buffer, 0x40);
+            if (string_compare_a(lp_module_name, dll_name))
                 return (DWORD64)module->BaseAddress;
         }
         next = next->Flink;
@@ -248,9 +262,41 @@ inline DWORD64 get_module_handle_a(char *lpModuleName)
     return 0;
 }
 
+/*
+    Low level version of GetProcessAddress function. Manually run through the export table to find
+    the matching matching name. Return the function address.
+    See: https://learn.microsoft.com/en-us/windows/win32/api/libloaderapi/nf-libloaderapi-getprocaddress
+
+*/
+inline DWORD64 get_process_address(DWORD64 module_base, LPCSTR lp_proc_name) {
+    PIMAGE_DOS_HEADER dos = NULL;
+    PIMAGE_NT_HEADERS nt = NULL;
+    PIMAGE_FILE_HEADER file = NULL;
+    PIMAGE_OPTIONAL_HEADER opt = NULL;
+
+    // TODO:Parse the PE headers
+
+    // Retrieve the export table
+    // See: https://learn.microsoft.com/en-us/windows/win32/debug/pe-format#the-edata-section-image-only Export Directory Table
+    IMAGE_EXPORT_DIRECTORY *export_table = (PIMAGE_EXPORT_DIRECTORY)(module_base + opt->DataDirectory[0].VirtualAddress);
+    PDWORD addresses_of_names = (PDWORD)((LPBYTE)module_base + export_table->AddressOfNames);
+    PDWORD addresses_of_functions = (PDWORD)((LPBYTE)module_base + export_table->AddressOfFunctions);
+    PDWORD addresses_of_name_ordinals = (PDWORD)((LPBYTE)module_base + export_table->AddressOfNameOrdinals);
+
+    PBYTE p_function_name = NULL;
+    // Iterate through the table to find the matching name
+    for (DWORD x = 0; x < export_table->NumberOfNames; x++) {
+        p_function_name = addresses_of_functions[x] + (PBYTE)module_base;
+        if (string_compare_a((PCHAR)p_function_name, lp_proc_name)) {
+            return ((DWORD64)module_base + addresses_of_functions[x]);
+        }
+    }
+    return 0;
+}
+
 void ReflexiveLoad()
 {
-    // Calculate the address of current instuction
+    // Step 1: Calculate the address of own image 
     DWORD64 loader_image_addr;
     loader_image_addr = (DWORD64)__buildin_extract_return_addr(__builtin_return_address(0));
 
@@ -274,7 +320,7 @@ void ReflexiveLoad()
         loader_image_addr--;
     }
 
-    // Allocate memory for loading DLL
+    // Step 2: handle kernel exports to retrieve necessary functions
     // System function names:
     char KERNEL32_DLL[] = {'\x4b', '\x45', '\x52', '\x4e', '\x45', '\x4c', '\x33', '\x32', '\x2e', '\x44', '\x4c', '\x4c', 0};
     char VirtualAlloc[] = {'\x56', '\x69', '\x72', '\x74', '\x75', '\x61', '\x6c', '\x41', '\x6c', '\x6c', '\x6f', '\x63', 0};
@@ -283,8 +329,27 @@ void ReflexiveLoad()
 
     // Get module handle of kernel32.dll
     DWORD64 kernel32 = get_module_handle_a(KERNEL32_DLL);
-    // Load addresses of kernel32.dll calls:
-    // virtualAlloc
-    // pGetProcAddress
-    // pLoadLibraryA
+    // Load addresses of kernel32.dll calls
+
+    // https://learn.microsoft.com/en-us/windows/win32/api/memoryapi/nf-memoryapi-virtualalloc
+    VIRTUALALLOC virtual_alloc = (VIRTUALALLOC)get_process_address(kernel32, VirtualAlloc);
+
+    // https://learn.microsoft.com/en-us/windows/win32/api/libloaderapi/nf-libloaderapi-getprocaddress
+    GETPROCADDRESS get_proc_address = (GETPROCADDRESS)get_process_address(kernel32, GetProcAddress);
+    
+    // https://learn.microsoft.com/en-us/windows/win32/api/libloaderapi/nf-libloaderapi-loadlibrarya
+    LOADLIBRARYA p_load_library_a = (LOADLIBRARYA)get_process_address(kernel32, LoadLibraryA);
+
+    // Now we have access to system functions from kernel32
+
+    // Step 3: allocate memory for the dll
+    DWORD64 dll_base = (DWORD64)virtual_alloc(NULL, nt_headers_addr->OptionalHeader.SizeOfImage, MEM_RESERVE | MEM_COMMIT, PAGE_EXECUTE_READWRITE);
+
+    // Step 4: copy headers
+
+    // Step 5: copy dll sections
+
+    // Step 6: resolve imports
+
+    // Step 7: call the dll
 }
