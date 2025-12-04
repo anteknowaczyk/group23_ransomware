@@ -268,7 +268,8 @@ inline DWORD64 get_module_handle_a(char *lp_module_name)
     See: https://learn.microsoft.com/en-us/windows/win32/api/libloaderapi/nf-libloaderapi-getprocaddress
 
 */
-inline DWORD64 get_process_address(DWORD64 module_base, LPCSTR lp_proc_name) {
+inline DWORD64 get_process_address(DWORD64 module_base, LPCSTR lp_proc_name)
+{
     PIMAGE_DOS_HEADER dos = NULL;
     PIMAGE_NT_HEADERS nt = NULL;
     PIMAGE_FILE_HEADER file = NULL;
@@ -285,18 +286,29 @@ inline DWORD64 get_process_address(DWORD64 module_base, LPCSTR lp_proc_name) {
 
     PBYTE p_function_name = NULL;
     // Iterate through the table to find the matching name
-    for (DWORD x = 0; x < export_table->NumberOfNames; x++) {
+    for (DWORD x = 0; x < export_table->NumberOfNames; x++)
+    {
         p_function_name = addresses_of_functions[x] + (PBYTE)module_base;
-        if (string_compare_a((PCHAR)p_function_name, lp_proc_name)) {
+        if (string_compare_a((PCHAR)p_function_name, lp_proc_name))
+        {
             return ((DWORD64)module_base + addresses_of_functions[x]);
         }
     }
     return 0;
 }
 
+inline DWORD64 copy_memory(PBYTE target, PBYTE source, SIZE_T len)
+{
+    while (len > 0)
+    {
+        *target++ = *source++;
+    }
+    return target;
+}
+
 void ReflexiveLoad()
 {
-    // Step 1: Calculate the address of own image 
+    // Step 1: Calculate the address of own image
     DWORD64 loader_image_addr;
     loader_image_addr = (DWORD64)__buildin_extract_return_addr(__builtin_return_address(0));
 
@@ -336,7 +348,7 @@ void ReflexiveLoad()
 
     // https://learn.microsoft.com/en-us/windows/win32/api/libloaderapi/nf-libloaderapi-getprocaddress
     GETPROCADDRESS get_proc_address = (GETPROCADDRESS)get_process_address(kernel32, GetProcAddress);
-    
+
     // https://learn.microsoft.com/en-us/windows/win32/api/libloaderapi/nf-libloaderapi-loadlibrarya
     LOADLIBRARYA p_load_library_a = (LOADLIBRARYA)get_process_address(kernel32, LoadLibraryA);
 
@@ -346,8 +358,20 @@ void ReflexiveLoad()
     DWORD64 dll_base = (DWORD64)virtual_alloc(NULL, nt_headers_addr->OptionalHeader.SizeOfImage, MEM_RESERVE | MEM_COMMIT, PAGE_EXECUTE_READWRITE);
 
     // Step 4: copy headers
+    copy_memory(dll_base, loader_image_addr, nt_headers_addr->OptionalHeader.SizeOfHeaders);
 
     // Step 5: copy dll sections
+    DWORD virtual_addr;
+    DWORD data_addr;
+    PIMAGE_SECTION_HEADER section_header_addr = IMAGE_FIRST_SECTION(nt_headers_addr);
+
+    for (; section_header_addr->VirtualAddress != (DWORD)NULL; section_header_addr++)
+    {
+        virtual_addr = dll_base + section_header_addr->VirtualAddress;
+        data_addr = loader_image_addr + section_header_addr->PointerToRawData;
+
+        copy_memory(virtual_addr, data_addr, section_header_addr->SizeOfRawData);
+    }
 
     // Step 6: resolve imports
 
