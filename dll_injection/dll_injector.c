@@ -1,10 +1,10 @@
 #include <windows.h>
 #include <stdio.h>
 
-static int main(int argc, char **argv)
+int main(int argc, char **argv)
 {
     // Get dll path and pid
-    PCSTR path = argv[1];
+    const char *path = argv[1];
     DWORD pid = atoi(argv[2]);
 
     // Get process handle
@@ -12,7 +12,7 @@ static int main(int argc, char **argv)
 
     if (h_process == NULL)
     {
-        printf("Failed to get the process handle - %d\n", GetLastError());
+        printf("\nFailed to get the process handle - %d\n", GetLastError());
         return 1;
     }
 
