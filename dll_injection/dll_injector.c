@@ -3,6 +3,12 @@
 
 int main(int argc, char **argv)
 {
+    if (argc != 3)
+    {
+        printf("Use: %s <dll path> <pid>\n", argv[0]);
+        return 1;
+    }
+
     // Get dll path and pid
     const char *path = argv[1];
     DWORD pid = atoi(argv[2]);
