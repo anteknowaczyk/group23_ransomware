@@ -1,86 +1,93 @@
-#include <windows.h>
-
 #include <stdio.h>
+#include <stdlib.h>
 #include <stdint.h>
+#include <stdbool.h>
+
 #include <openssl/evp.h>
 
-void handle_error(void)
+#define KEY_SIZE 16
+#define IV_SIZE 16
+
+void handle_error(const char *msg)
 {
-    fprintf(stderr, "Error\n");
-    exit(1);
+    fprintf(stderr, "Error: %s\n", msg);
+    exit(EXIT_FAILURE);
 }
 
-int decrypt_file_aes(const char *source, const char *target, unsigned char *p_key, unsigned char *p_iv)
+/* Load AES key from .bin file */
+void load_key(const char *path, unsigned char key[KEY_SIZE])
 {
-    FILE *infile = NULL;
-    FILE *outfile = NULL;
+    FILE *f = fopen(path, "rb");
+    if (!f) handle_error("Failed to open key file");
 
-    // Open files
-    infile = fopen(infile, "rb");
-    if (!infile)
-    {
-        handle_error();
-    }
-    outfile = fopen(outfile, "rb");
-    if (!outfile)
-    {
-        handle_error();
-    }
-    // TODO: check input size 0 ?
+    if (fread(key, 1, KEY_SIZE, f) != KEY_SIZE)
+        handle_error("Failed to read key");
 
+    fclose(f);
+}
+
+/* AES-128-CTR decryption */
+int decrypt_file_aes_ctr(const char *source, const char *target, const unsigned char key[KEY_SIZE]) {
+    FILE *infile  = fopen(source, "rb");
+    if (!infile) handle_error("Cannot open encrypted file");
+
+    FILE *outfile = fopen(target, "wb");
+    if (!outfile) {
+        fclose(infile);
+        handle_error("Cannot open output file");
+    }
+
+    unsigned char iv[IV_SIZE];
+
+    // Read IV from start of encrypted file 
+    if (fread(iv, 1, IV_SIZE, infile) != IV_SIZE)
+        handle_error("Failed to read IV");
+
+    // Setup decryption context
     EVP_CIPHER_CTX *ctx = EVP_CIPHER_CTX_new();
-    if (!ctx)
-    {
-        handle_error();
-    }
+    if (!ctx) handle_error("EVP_CIPHER_CTX_new failed");
 
-    // Initialize AES-128-CTR
     if (1 != EVP_DecryptInit_ex(ctx, EVP_aes_128_ctr(), NULL, key, iv))
-    {
-        handle_error();
-    }
+        handle_error("EVP_DecryptInit_ex failed");
 
     /* DECRYPTION */
-
-    unsigned char inbuff[4096];
-    unsigned char outbuff[4096 + EVP_MAX_BLOCK_LENGTH];
+    unsigned char inbuf[4096];
+    unsigned char outbuf[4096 + EVP_MAX_BLOCK_LENGTH];
     int outlen;
 
-    while (true)
-    {
-        int inbyte = fread(inbuff, 1, sizeof(inbuff), infile);
-        if (inbyte <= 0)
-            break;
+    size_t nread;
+    while ((nread = fread(inbuf, 1, sizeof(inbuf), infile)) > 0) {
+        if (1 != EVP_DecryptUpdate(ctx, outbuf, &outlen, inbuf, (int)nread))
+            handle_error("EVP_DecryptUpdate failed");
 
-        if (1 != EVP_DecryptUpdate(ctx, outbuff, &outlen, inbuff, inbyte))
-        {
-            handle_error();
-        }
-        fwrite(outbuff, 1, outlen, outfile);
+        if (fwrite(outbuf, 1, outlen, outfile) != (size_t)outlen)
+            handle_error("Failed to write plaintext");
     }
 
-    // Finalize. There is no padding due to CTR mode (outlen = 0)
-    if (1 != EVP_EncryptFinal_ex(ctx, outbuff, &outlen))
-    {
-        handle_error();
-    }
-    fwrite(outbuff, 1, outlen, outfile);
+    // Finalize
+    if (1 != EVP_DecryptFinal_ex(ctx, outbuf, &outlen))
+        handle_error("EVP_DecryptFinal_ex failed");
 
     // Cleanup
     EVP_CIPHER_CTX_free(ctx);
-    fclose(in);
-    fclose(out);
+    fclose(infile);
+    fclose(outfile);
+
+    return 0;
 }
 
-int main()
+int main(void)
 {
-    const char *src = "";
-    const char *trg = "";
-    unsigned char key[16];
-    unsigned char iv[16];
+    const char *enc_file  = "C:/Users/20231367/OneDrive - TU Eindhoven/Documents/Y3Q2/2IC80 Lab on Offensive Security/dll_injection/important.enc";
+    const char *out_file  = "C:/Users/20231367/OneDrive - TU Eindhoven/Documents/Y3Q2/2IC80 Lab on Offensive Security/dll_injection/important_decrypted.pdf";
+    const char *key_file  = "C:/Users/20231367/OneDrive - TU Eindhoven/Documents/Y3Q2/2IC80 Lab on Offensive Security/dll_injection/aes_key.bin";
 
-    // key = { }
-    // iv = { }
+    unsigned char key[KEY_SIZE];
 
-    decypt_file_aes(src, trg, key, iv);
+    load_key(key_file, key);
+
+    decrypt_file_aes_ctr(enc_file, out_file, key);
+
+    printf("Decryption complete.\n");
+    return 0;
 }
