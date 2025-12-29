@@ -4,7 +4,7 @@
 extern "C" {
 #endif
 
-void get_dir(char *buffer, size_t size);
+int attack_crypto(const char *input_file, const char *output_file);
 
 #ifdef __cplusplus
 }

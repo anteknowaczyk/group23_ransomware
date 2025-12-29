@@ -1,11 +1,19 @@
 #include <windows.h>
+#include <string.h>
 
 void get_dir(char *buffer, size_t size)
 {
-    DWORD len = GetModuleFileNameA(NULL, buffer, (DWORD)size);
-    if (len == 0 || len == size) return;
+    if (!buffer || size == 0)
+        return;
 
-    // Remove exe filename
+    DWORD len = GetModuleFileNameA(NULL, buffer, (DWORD)size);
+
+    if (len == 0 || len >= size) {
+        buffer[0] = '\0';
+        return;
+    }
+
     char *last = strrchr(buffer, '\\');
-    if (last) *last = '\0';
+    if (last)
+        *last = '\0';
 }

