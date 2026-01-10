@@ -1,3 +1,5 @@
+#include "get_relative_path.h"
+
 #include <stdio.h>
 #include <stdlib.h>
 #include <stdint.h>
@@ -135,16 +137,52 @@ void decrypt_file_aes_ctr(const char *source, const char *target, const unsigned
     fclose(out);
 }
 
+int strip_enc_path(const char *input, char *output, size_t output_size)
+{
+    size_t len = strlen(input);
+
+    if (len < 4 || strcmp(input + len - 4, ".enc") != 0) {
+        return -1; /* not an .enc file */
+    }
+
+    if (len - 4 >= output_size) {
+        return -1;
+    }
+
+    memcpy(output, input, len - 4);
+    output[len - 4] = '\0';
+
+    return 0;
+}
+
 int main(int argc, char *argv[]) {
-    if (argc != 3) {
-        printf("Usage: %s <encrypted_file> <decrypted_output>\n", argv[0]);
+    if (argc != 2) {
+        printf("Usage: %s <encrypted_file>", argv[0]);
+        return 1;
+    }
+    // Get private key path and aes path
+    char private_rsa[MAX_PATH];
+    if (get_relative_path(private_rsa, sizeof(private_rsa), "private_key.pem") != 0) {
+        return 1;
+    }
+
+    char aes[MAX_PATH];
+    if (get_relative_path(aes, sizeof(aes), "aes_key.bin") != 0) {
         return 1;
     }
 
     unsigned char aes_key[KEY_SIZE];
-    load_aes_key_rsa("C:/Users/20231367/OneDrive - TU Eindhoven/Documents/Y3Q2/2IC80 Lab on Offensive Security/dll_injection/build/aes_key.bin", "C:/Users/20231367/OneDrive - TU Eindhoven/Documents/Y3Q2/2IC80 Lab on Offensive Security/dll_injection/build/private_key.pem", aes_key);
 
-    decrypt_file_aes_ctr(argv[1], argv[2], aes_key);
+    load_aes_key_rsa(aes, private_rsa, aes_key);
+
+    // Get output path
+    char output_file[MAX_PATH];
+
+    if (strip_enc_path(argv[1], output_file, sizeof(output_file)) != 0) {
+        return -1;
+    }
+
+    decrypt_file_aes_ctr(argv[1], output_file, aes_key);
 
     memset(aes_key, 0, sizeof(aes_key));
     rng_free();

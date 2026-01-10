@@ -4,7 +4,9 @@
 extern "C" {
 #endif
 
-int attack_crypto(const char *input_file, const char *output_file);
+int attack_crypto(const char *input_file);
+
+void crypto_cleanup(void);
 
 #ifdef __cplusplus
 }
