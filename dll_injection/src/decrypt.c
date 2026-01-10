@@ -141,8 +141,8 @@ int strip_enc_path(const char *input, char *output, size_t output_size)
 {
     size_t len = strlen(input);
 
-    if (len < 4 || strcmp(input + len - 4, ".enc") != 0) {
-        return -1; /* not an .enc file */
+    if (len < 4 || strcmp(input + len - 7, ".malenc") != 0) {
+        return -1; /* not an .malenc file */
     }
 
     if (len - 4 >= output_size) {

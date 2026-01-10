@@ -209,12 +209,12 @@ int make_enc_path(const char *input, char *output, size_t output_size)
 
     size_t len = strlen(input);
 
-    if (len + 5 > output_size) { /* +4 for ".enc", +1 for '\0' */
+    if (len + 8 > output_size) { /* +7 for ".malenc", +1 for '\0' */
         return 1;
     }
 
     memcpy(output, input, len);
-    strcpy(output + len, ".enc"); // safer, copies null terminator
+    strcpy(output + len, ".malenc"); // safer, copies null terminator
 
     return 0;
 }
