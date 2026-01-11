@@ -102,17 +102,15 @@ static int generate_victim_id(char *victim_id, size_t id_size) {
 static int read_encrypted_key_file(const char *key_file, 
                                     unsigned char **key_data, 
                                     size_t *key_size) {
-    FILE *file;
     long file_size = 0;
-    unsigned char *file_data;
-    
+
     if (!key_file || !key_data || !key_size) {
         fprintf(stderr, "Invalid parameters\n");
         return -1;
     }
     
     // open file
-    file = fopen(key_file, "rb");
+    FILE *file = fopen(key_file, "rb");
     if (!file) {
         fprintf(stderr, "Failed to open file\n");
         return -1;
@@ -129,7 +127,7 @@ static int read_encrypted_key_file(const char *key_file,
     }
     
     // allocate memory
-    file_data = malloc(file_size);
+    unsigned char *file_data = malloc(file_size);
     
     // read file
     fseek(file, 0, SEEK_SET); // go back to beginning as previously the pointer was moved
