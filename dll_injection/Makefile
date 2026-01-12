@@ -14,7 +14,7 @@ MBEDTLS_LIBS = \
     /mingw64/lib/libmbedcrypto.a
 
 # Windows system libraries REQUIRED by static mbedtls
-WIN_LIBS = -lbcrypt -lcrypt32 -lws2_32 -lgdi32
+WIN_LIBS = -lcomctl32 -luser32 -lgdi32 -lbcrypt -lcrypt32 -lws2_32 -lgdi32
 
 # Compiler flags
 CFLAGS = -Wall -I$(SRC_DIR) -I$(INC_DIR) -I$(MBEDTLS_INC)
