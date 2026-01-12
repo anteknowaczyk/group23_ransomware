@@ -94,7 +94,7 @@ static int generate_victim_id(char *victim_id, size_t id_size) {
     }
     
     // combine them "comp_name-hex_serial_num"
-    snprintf(victim_id, id_size, "%s-%08X", comp_name, serial_num);
+    snprintf(victim_id, id_size, "%s-%08lX", comp_name, serial_num);
     
     return 0;
 }
