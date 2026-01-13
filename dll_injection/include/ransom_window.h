@@ -4,6 +4,6 @@
 #include <windows.h>
 
 // Function to create and run the window
-int CreateMyWindow(HINSTANCE hInstance, int nCmdShow);
+int CreateBadWindow(HINSTANCE hInstance, int nCmdShow);
 
 #endif // MYWINDOW_H

