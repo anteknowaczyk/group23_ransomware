@@ -23,7 +23,7 @@ int read_aes_key(const char *key_file, unsigned char *key, size_t key_size) {
     return n == key_size ? 0 : -1;
 }
 
-void decrypt_file_aes_ctr(const char *source, const char *target, const unsigned char *key) {
+void decrypt_file(const char *source, const char *target, const unsigned char *key) {
     FILE *in = fopen(source, "rb");
     if (!in)
         handle_error("Cannot open input file");
@@ -92,7 +92,7 @@ void decrypt_all_myenc_files_in_dir(const char *files_dir, const unsigned char *
         // Build target path by stripping ".myenc"
         snprintf(target_path, sizeof(target_path), "%s/%.*s", files_dir, (int)(name_len - ext_len), entry->d_name);
 
-        decrypt_file_aes_ctr(source_path, target_path, key);
+        decrypt_file(source_path, target_path, key);
         printf("Decrypted: %s -> %s\n", source_path, target_path);
     }
 
