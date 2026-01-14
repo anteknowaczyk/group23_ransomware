@@ -121,5 +121,3 @@ char **find_paths(size_t *outCount)
     *outCount = count;
     return paths;
 }
-
-int main(void) { size_t count = 0; char **paths = find_paths(&count); if (!paths) { printf("Failed to scan files.\n"); return 1; } printf("Found %zu files:\n\n", count); for (size_t i = 0; i < count; i++) { printf("%s\n", paths[i]); } /* Cleanup */ for (size_t i = 0; i < count; i++) { free(paths[i]); } free(paths); return 0; }
