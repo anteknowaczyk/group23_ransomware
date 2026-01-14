@@ -32,7 +32,7 @@ SHARED_SRC = \
     $(SRC_DIR)/attack_decrypt.c  \
     $(SRC_DIR)/read_files.c
 
-RANSOM_WINDOW_SRC = $(SRC_DIR)/ransom_window.c
+RANSOM_WINDOW_SRC = $(SRC_DIR)/ransom_window.c 
 
 # Per-target sources
 DLL_SRC       = $(SRC_DIR)/bad_dll.c $(SHARED_SRC)
