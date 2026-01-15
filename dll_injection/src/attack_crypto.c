@@ -20,8 +20,6 @@
 #define IV_SIZE     16
 #define BUFFER_SIZE 4096
 
-storage_context_t ctx = { "Software\\LUCAware" };
-
 /* Global variables for AES key */
 
 static unsigned char aes_key[KEY_SIZE];
@@ -108,10 +106,11 @@ static void save_encrypted_key_rsa(const unsigned char *key, size_t key_len, con
     }
 
     storage_context_t ctx = { "Software\\LUCAware" };
-    if (store_value(&ctx, "EncryptedKey", cipher, rsa_len) != 0) {
+    if (store_value(&ctx, "EnKey", cipher, rsa_len) != 0) {
         free(cipher);
         handle_error("Failed to store encrypted AES key in registry");
     }
+    
     /* Cleanup */
     free(cipher);
     mbedtls_pk_free(&pk);

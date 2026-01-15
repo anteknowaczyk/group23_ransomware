@@ -8,7 +8,7 @@
 #include "mbedtls/ctr_drbg.h"
 #include "mbedtls/pem.h"
 
-#define KEY_SIZE 2048
+#define KEY_SIZE 1024
 #define EXPONENT 65537
 
 int main(void)
@@ -49,7 +49,7 @@ int main(void)
         return 1;
     }
 
-    unsigned char buf[16000]; // sufficient buffer for 2048-bit key
+    unsigned char buf[16000]; // sufficient buffer for 1024-bit key
     memset(buf, 0, sizeof(buf));
 
     if ((ret = mbedtls_pk_write_key_pem(&pk, buf, sizeof(buf))) != 0) {

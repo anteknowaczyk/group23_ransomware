@@ -15,10 +15,10 @@
 #pragma comment(lib, "ws2_32.lib")
 
 #define AES_KEY_SIZE 16           // 128-bit AES
-#define RSA_KEY_SIZE 256          // 2048-bit RSA
+#define RSA_KEY_SIZE 128          // 1024-bit RSA
 #define REG_PATH "Software\\LUCAware"
 #define ID_VALUE_NAME "MyID"
-#define ENCRYPTED_KEY_NAME "EncryptedKey"
+#define ENCRYPTED_KEY_NAME "EnKey"
 #define DECRYPTION_KEY_NAME "DecryptionKey"
 
 WSADATA wsa;
