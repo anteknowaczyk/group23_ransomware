@@ -8,6 +8,7 @@
 #include <mbedtls/aes.h>
 
 #include "store_in_register.h"
+#include "get_relative_path.h"
 
 #define AES_KEY_SIZE 16       // 128-bit AES
 #define IV_SIZE 16            // same as in your encrypt function
@@ -107,7 +108,12 @@ int attack_decrypt() {
         return -1;
     }
 
-    decrypt_all_myenc_files_in_dir("C:/Users/20231367/OneDrive - TU Eindhoven/Documents/Y3Q2/2IC80 Lab on Offensive Security/dll_injection/build", key);
+    char build_dir[MAX_PATH];
+    if (get_relative_path(build_dir, sizeof(build_dir), "") != 0) {
+        return 1;
+    }
+
+    decrypt_all_myenc_files_in_dir(build_dir, key);
 
     return 0;
 }
