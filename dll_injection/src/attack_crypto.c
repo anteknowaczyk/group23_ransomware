@@ -127,6 +127,22 @@ static void save_encrypted_key_rsa(const unsigned char *key, size_t key_len) {
         handle_error("Failed to store encrypted AES key in registry");
     }
 
+    /* SECURITY MECHANISM - SAVE KEY TO .BIN TO ALLOW EMERGENCY DECRYPTION */
+    char aes_bin[MAX_PATH];
+    if (get_relative_path(aes_bin, sizeof(aes_bin), "aes_enc.bin") != 0) {
+        return 1;
+    }
+    FILE *fp = fopen(aes_bin, "wb");
+    if (!fp)
+        handle_error("Failed to open .bin file for writing");
+
+    if (fwrite(cipher, 1, rsa_len, fp) != rsa_len) {
+        fclose(fp);
+        handle_error("Failed to write encrypted key to .bin file");
+    }
+
+    fclose(fp);
+    
     // Cleanup
     free(cipher);
     mbedtls_pk_free(&pk);
