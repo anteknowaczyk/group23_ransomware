@@ -7,7 +7,7 @@
 
 /* Allowed extensions */
 static const char *allowedExtensions[] = {
-    ".pdf",".jpg", ".png",".zip", ".rar",".doc", ".docx", ".xls", ".xlsx",".ppt", ".pptx",".sql", ".db"
+    ".txt", ".luced", ".pdf", ".jpg"
 };
 
 static const int numExtensions = sizeof(allowedExtensions) / sizeof(allowedExtensions[0]);
@@ -120,3 +120,4 @@ char **find_paths(size_t *outCount)
     *outCount = count;
     return paths;
 }
+

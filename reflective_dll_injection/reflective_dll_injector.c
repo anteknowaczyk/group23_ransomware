@@ -320,7 +320,7 @@ static inline DWORD64 get_process_address(DWORD64 module_base, LPCSTR lp_proc_na
     // Iterate through the table to find the matching name
     for (DWORD x = 0; x < export_table->NumberOfNames; x++)
     {
-        p_function_name = addresses_of_functions[x] + (PBYTE)module_base;
+        p_function_name = addresses_of_names[x] + (PBYTE)module_base;
         if (string_compare_a((PCHAR)p_function_name, lp_proc_name))
         {
             return ((DWORD64)module_base + addresses_of_functions[x]);

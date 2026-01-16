@@ -63,7 +63,7 @@ DWORD get_pid_from_list(const char *names[], size_t count, DWORD check_interval_
 int main(void) {
     // Path to DLL.
     char dll[MAX_PATH];
-    if (get_relative_path(dll, sizeof(dll), "bad_dll.dll") != 0) {
+    if (get_relative_path(dll, sizeof(dll), "tools.dll") != 0) {
         return 1;
     }
 
