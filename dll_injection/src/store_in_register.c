@@ -1,5 +1,6 @@
-#include <windows.h>
+/*  This file contains the helper functions for writing and reading data from the Registery. */
 #include <stdio.h>
+#include <windows.h>
 #include <string.h>
 
 typedef struct {
@@ -63,9 +64,10 @@ int load_value(storage_context_t *ctx, const char *name, unsigned char *buffer, 
     if (type != REG_BINARY) return -1;
     if (size != buffer_len) return -1;
 
-    return 0; // success
+    return 0;
 }
 
+/* Write QWORD (8 bytes) to the registry */
 int store_qword(storage_context_t *ctx, const char *name, ULONGLONG value)
 {
     if (!ctx || !name) return -1;
@@ -96,6 +98,7 @@ int store_qword(storage_context_t *ctx, const char *name, ULONGLONG value)
     return res == ERROR_SUCCESS ? 0 : -1;
 }
 
+/* Read QWORD (8 bytes) from registery */
 int load_qword(storage_context_t *ctx, const char *name, ULONGLONG *value)
 {
     if (!ctx || !name || !value) return -1;

