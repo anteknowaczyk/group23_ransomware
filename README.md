@@ -2,8 +2,8 @@
 
 Authors:
 - Antoni Nowaczyk 1934899
-- Maja Waszak
-- Milosz Janewski
+- Maja Waszak 1997521
+- Milosz Janewski 1962736
 
 This reporitory contains the ransomware prototype Locked Until Coins Arrive (LUCA). For specification see the Report.
 
@@ -15,3 +15,4 @@ Subdirectory `reflective_dll_injection` contains the incomplete Reflective DLL I
 `server.py` is the simulated attacker server module, written in Python Flask. It runs on local host and must run when LUCA is executed. 
 
 *Note: manual decryption is possible. For safety, the encrypted AES key is stored in `aes_enc.bin`. Decrypt the key with `private_key.pem` to get plaintext AES key.*
+
