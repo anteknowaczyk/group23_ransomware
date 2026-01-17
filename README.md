@@ -5,7 +5,9 @@ Authors:
 - Maja Waszak 1997521
 - Milosz Janewski 1962736
 
-This reporitory contains the ransomware prototype Locked Until Coins Arrive (LUCA). For specification see the Report.
+This reporitory contains the ransomware prototype Locked Until Coins Arrive (LUCA). For specification see the Report. 
+
+Warining! Only run LUCA in controlled environment (Windows VM). Executing the compiled LUCA code leads to file encryption in Pictures directory. This may result in irrevertible file loss.
 
 Subdirectory `dll_injection` contains the complete code of LUCA: sourcecode in `src`, header files in `include` and example RSA keys in `keys`. 
 The `Makefile` contains hardcoded Mbed-TLS paths for MSYS32 MINGW64. 
